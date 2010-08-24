@@ -1,0 +1,57 @@
+[submodule "src/bleach"]
+	path = src/bleach
+	url = git://github.com/jsocol/bleach.git
+[submodule "src/cache-panel"]
+	path = src/cache-panel
+	url = git://github.com/jbalogh/django-debug-cache-panel
+[submodule "src/check"]
+	path = src/check
+	url = git://github.com/jbalogh/check.git
+[submodule "src/commonware"]
+	path = src/commonware
+	url = git://github.com/jsocol/commonware.git
+[submodule "src/django-cache-machine"]
+	path = src/django-cache-machine
+	url = git://github.com/jbalogh/django-cache-machine.git
+[submodule "src/django-cronjobs"]
+	path = src/django-cronjobs
+	url = git://github.com/jsocol/django-cronjobs.git
+[submodule "src/django-debug-toolbar"]
+	path = src/django-debug-toolbar
+	url = git://github.com/robhudson/django-debug-toolbar.git
+[submodule "src/django-extensions"]
+	path = src/django-extensions
+	url = git://github.com/django-extensions/django-extensions.git
+[submodule "src/django-mozilla-product-details"]
+	path = src/django-mozilla-product-details
+	url = git://github.com/fwenzel/django-mozilla-product-details
+[submodule "src/django-multidb-router"]
+	path = src/django-multidb-router
+	url = git://github.com/jbalogh/django-multidb-router.git
+[submodule "src/django-nose"]
+	path = src/django-nose
+	url = git://github.com/jbalogh/django-nose.git
+[submodule "src/jingo"]
+	path = src/jingo
+	url = git://github.com/jbalogh/jingo.git
+[submodule "src/jingo-minify"]
+	path = src/jingo-minify
+	url = git://github.com/jsocol/jingo-minify.git
+[submodule "src/py-wikimarkup"]
+	path = src/py-wikimarkup
+	url = git://github.com/pcraciunoiu/py-wikimarkup.git
+[submodule "src/schematic"]
+	path = src/schematic
+	url = git://github.com/jbalogh/schematic.git
+[submodule "src/test-utils"]
+	path = src/test-utils
+	url = git://github.com/jbalogh/test-utils.git
+[submodule "src/tower"]
+	path = src/tower
+	url = git://github.com/clouserw/tower.git
+[submodule "src/django"]
+	path = src/django
+	url = git://github.com/django/django
+[submodule "src/django-authority"]
+	path = src/django-authority
+	url = git://github.com/jsocol/django-authority
