@@ -55,3 +55,9 @@
 [submodule "src/django-authority"]
 	path = src/django-authority
 	url = git://github.com/jsocol/django-authority
+[submodule "src/django-csp"]
+	path = src/django-csp
+	url = git://github.com/mozilla/django-csp.git
+[submodule "src/tweepy"]
+	path = src/tweepy
+	url = git://github.com/joshthecoder/tweepy.git

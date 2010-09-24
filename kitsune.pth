@@ -51,3 +51,5 @@ src/bleach
 src/tower
 src/django-extensions
 src/django
+src/tweepy
+src/django-csp
