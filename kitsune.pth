@@ -2,7 +2,7 @@ packages
 packages/pytz
 packages/coverage
 packages/sqlparse
-packages/GitPython
+packages/GitPython/lib
 packages/Werkzeug
 packages/Babel
 packages/python-dateutil
