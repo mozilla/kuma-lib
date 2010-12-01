@@ -61,3 +61,6 @@
 [submodule "src/tweepy"]
 	path = src/tweepy
 	url = git://github.com/joshthecoder/tweepy.git
+[submodule "src/django-timezones"]
+	path = src/django-timezones
+	url = git://github.com/brosner/django-timezones.git
