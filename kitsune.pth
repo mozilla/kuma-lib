@@ -36,6 +36,7 @@ src/django-cronjobs
 src/django-cache-machine
 src/django-nose
 src/django-authority
+src/django-timezones
 src/commonware
 src/jingo
 src/cache-panel
