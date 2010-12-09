@@ -64,7 +64,7 @@ class test_TokenBucketQueue(unittest.TestCase):
         time_start = time.time()
         [x.put(str(i)) for i in xrange(20)]
         for i in xrange(20):
-            sys.stderr.write("x")
+            sys.stderr.write(".")
             x.wait()
         self.assertGreater(time.time() - time_start, 1.5)
 
@@ -183,20 +183,21 @@ class test_TaskBucket(unittest.TestCase):
     @skip_if_disabled
     def test_has_rate_limits(self):
         b = buckets.TaskBucket(task_registry=self.registry)
-        self.assertEqual(b.buckets[TaskA.name].fill_rate, 10)
+        self.assertEqual(b.buckets[TaskA.name]._bucket.fill_rate, 10)
         self.assertIsInstance(b.buckets[TaskB.name], buckets.Queue)
-        self.assertEqual(b.buckets[TaskC.name].fill_rate, 1)
+        self.assertEqual(b.buckets[TaskC.name]._bucket.fill_rate, 1)
         self.registry.register(TaskD)
         b.init_with_registry()
         try:
-            self.assertEqual(b.buckets[TaskD.name].fill_rate, 1000 / 60.0)
+            self.assertEqual(b.buckets[TaskD.name]._bucket.fill_rate,
+                             1000 / 60.0)
         finally:
             self.registry.unregister(TaskD)
 
     @skip_if_disabled
     def test_on_empty_buckets__get_raises_empty(self):
         b = buckets.TaskBucket(task_registry=self.registry)
-        self.assertRaises(buckets.QueueEmpty, b.get)
+        self.assertRaises(buckets.QueueEmpty, b.get, block=False)
         self.assertEqual(b.qsize(), 0)
 
     @skip_if_disabled
@@ -219,7 +220,7 @@ class test_TaskBucket(unittest.TestCase):
         # 20 items should take at least one second to complete
         time_start = time.time()
         for i, job in enumerate(jobs):
-            sys.stderr.write("i")
+            sys.stderr.write(".")
             self.assertEqual(b.get(), job)
         self.assertGreater(time.time() - time_start, 1.5)
 
@@ -258,9 +259,9 @@ class test_TaskBucket(unittest.TestCase):
 
             [b.put(job) for job in jobs]
             for i, job in enumerate(jobs):
-                sys.stderr.write("0")
+                sys.stderr.write(".")
                 self.assertTrue(b.get(), job)
-            self.assertEqual(i+1, len(jobs))
+            self.assertEqual(i + 1, len(jobs))
         finally:
             self.registry.unregister(TaskD)
 
@@ -283,10 +284,6 @@ class test_TaskBucket(unittest.TestCase):
 
 
 class test_FastQueue(unittest.TestCase):
-
-    def test_can_consume(self):
-        x = buckets.FastQueue()
-        self.assertTrue(x.can_consume())
 
     def test_items(self):
         x = buckets.FastQueue()

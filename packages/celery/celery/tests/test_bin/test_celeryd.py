@@ -7,9 +7,11 @@ from multiprocessing import get_logger, current_process
 from StringIO import StringIO
 
 from celery import conf
-from celery import platform
+from celery import platforms
 from celery import signals
-from celery.bin import celeryd as cd
+from celery import log
+from celery.apps import worker as cd
+from celery.bin.celeryd import WorkerCommand, main as celeryd_main
 from celery.exceptions import ImproperlyConfigured
 from celery.utils import patch
 from celery.utils.functional import wraps
@@ -19,6 +21,7 @@ from celery.tests.utils import execute_context
 
 
 patch.ensure_process_aware_logger()
+
 
 def disable_stdouts(fun):
 
@@ -37,7 +40,7 @@ def disable_stdouts(fun):
 class _WorkController(object):
 
     def __init__(self, *args, **kwargs):
-        pass
+        self.logger = log.get_default_logger()
 
     def start(self):
         pass
@@ -66,8 +69,8 @@ class test_Worker(unittest.TestCase):
         def i(sig, handler):
             handlers[sig] = handler
 
-        p = platform.install_signal_handler
-        platform.install_signal_handler = i
+        p = platforms.install_signal_handler
+        platforms.install_signal_handler = i
         try:
             w = self.Worker()
             w._isatty = False
@@ -83,7 +86,7 @@ class test_Worker(unittest.TestCase):
                 self.assertIn(sig, handlers)
             self.assertNotIn("SIGHUP", handlers)
         finally:
-            platform.install_signal_handler = p
+            platforms.install_signal_handler = p
 
     @disable_stdouts
     def test_startup_info(self):
@@ -139,8 +142,8 @@ class test_Worker(unittest.TestCase):
 
     @disable_stdouts
     def test_on_listener_ready(self):
-
         worker_ready_sent = [False]
+
         def on_worker_ready(**kwargs):
             worker_ready_sent[0] = True
 
@@ -153,20 +156,19 @@ class test_Worker(unittest.TestCase):
 class test_funs(unittest.TestCase):
 
     @disable_stdouts
-    def test_dump_version(self):
-        self.assertRaises(SystemExit, cd.dump_version)
-
-    @disable_stdouts
     def test_set_process_status(self):
+        worker = Worker(hostname="xyzza")
         prev1, sys.argv = sys.argv, ["Arg0"]
         try:
-            st = cd.set_process_status("Running")
+            st = worker.set_process_status("Running")
             self.assertIn("celeryd", st)
+            self.assertIn("xyzza", st)
             self.assertIn("Running", st)
             prev2, sys.argv = sys.argv, ["Arg0", "Arg1"]
             try:
-                st = cd.set_process_status("Running")
+                st = worker.set_process_status("Running")
                 self.assertIn("celeryd", st)
+                self.assertIn("xyzza", st)
                 self.assertIn("Running", st)
                 self.assertIn("Arg1", st)
             finally:
@@ -176,7 +178,8 @@ class test_funs(unittest.TestCase):
 
     @disable_stdouts
     def test_parse_options(self):
-        opts = cd.parse_options(["--concurrency=512"])
+        cmd = WorkerCommand()
+        opts, args = cmd.parse_options("celeryd", ["--concurrency=512"])
         self.assertEqual(opts.concurrency, 512)
 
     @disable_stdouts
@@ -192,7 +195,7 @@ class test_funs(unittest.TestCase):
         p, cd.Worker = cd.Worker, Worker
         s, sys.argv = sys.argv, ["celeryd", "--discard"]
         try:
-            cd.main()
+            celeryd_main()
         finally:
             cd.Worker = p
             sys.argv = s
@@ -217,29 +220,31 @@ class test_signal_handlers(unittest.TestCase):
         def i(sig, handler):
             handlers[sig] = handler
 
-        p, platform.install_signal_handler = platform.install_signal_handler, i
+        p, platforms.install_signal_handler = \
+                platforms.install_signal_handler, i
         try:
             fun(*args, **kwargs)
             return handlers
         finally:
-            platform.install_signal_handler = p
+            platforms.install_signal_handler = p
 
     @disable_stdouts
     def test_worker_int_handler(self):
         worker = self._Worker()
         handlers = self.psig(cd.install_worker_int_handler, worker)
-
         next_handlers = {}
+
         def i(sig, handler):
             next_handlers[sig] = handler
-        p = platform.install_signal_handler
-        platform.install_signal_handler = i
+
+        p = platforms.install_signal_handler
+        platforms.install_signal_handler = i
         try:
             self.assertRaises(SystemExit, handlers["SIGINT"],
                               "SIGINT", object())
             self.assertTrue(worker.stopped)
         finally:
-            platform.install_signal_handler = p
+            platforms.install_signal_handler = p
 
         self.assertRaises(SystemExit, next_handlers["SIGINT"],
                           "SIGINT", object())

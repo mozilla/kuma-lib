@@ -2,13 +2,14 @@ import socket
 import unittest2 as unittest
 
 from datetime import datetime, timedelta
-from multiprocessing import get_logger
 from Queue import Empty
 
 from carrot.backends.base import BaseMessage
 from carrot.connection import BrokerConnection
+from celery.utils.timer2 import Timer
 
 from celery import conf
+from celery import log
 from celery.decorators import task as task_dec
 from celery.decorators import periodic_task as periodic_task_dec
 from celery.serialization import pickle
@@ -16,8 +17,8 @@ from celery.utils import gen_unique_id
 from celery.worker import WorkController
 from celery.worker.buckets import FastQueue
 from celery.worker.job import TaskRequest
+from celery.worker import listener
 from celery.worker.listener import CarrotListener, QoS, RUN
-from celery.worker.scheduler import Scheduler
 
 from celery.tests.compat import catch_warnings
 from celery.tests.utils import execute_context
@@ -25,6 +26,12 @@ from celery.tests.utils import execute_context
 
 class PlaceHolder(object):
         pass
+
+
+class MyCarrotListener(CarrotListener):
+
+    def restart_heartbeat(self):
+        self.heart = None
 
 
 class MockControlDispatch(object):
@@ -37,12 +44,16 @@ class MockControlDispatch(object):
 class MockEventDispatcher(object):
     sent = []
     closed = False
+    flushed = False
 
     def send(self, event, *args, **kwargs):
         self.sent.append(event)
 
     def close(self):
         self.closed = True
+
+    def flush(self):
+        self.flushed = True
 
 
 class MockHeart(object):
@@ -144,7 +155,7 @@ class test_QoS(unittest.TestCase):
 
     def test_decrement(self):
         consumer = self.MockConsumer()
-        qos = QoS(consumer, 10, get_logger())
+        qos = QoS(consumer, 10, log.get_default_logger())
         qos.update()
         self.assertEqual(int(qos.value), 10)
         self.assertEqual(consumer.prefetch_count, 10)
@@ -160,12 +171,15 @@ class test_CarrotListener(unittest.TestCase):
 
     def setUp(self):
         self.ready_queue = FastQueue()
-        self.eta_schedule = Scheduler(self.ready_queue)
-        self.logger = get_logger()
+        self.eta_schedule = Timer()
+        self.logger = log.get_default_logger()
         self.logger.setLevel(0)
 
+    def tearDown(self):
+        self.eta_schedule.stop()
+
     def test_mainloop(self):
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                            send_events=False)
 
         class MockConnection(object):
@@ -178,8 +192,8 @@ class test_CarrotListener(unittest.TestCase):
 
         it = l._mainloop()
         self.assertTrue(it.next(), "draining")
-
         records = {}
+
         def create_recorder(key):
             def _recorder(*args, **kwargs):
                 records[key] = True
@@ -206,7 +220,7 @@ class test_CarrotListener(unittest.TestCase):
         self.assertTrue(records.get("consumer_add"))
 
     def test_connection(self):
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                            send_events=False)
 
         l.reset_connection()
@@ -218,6 +232,7 @@ class test_CarrotListener(unittest.TestCase):
 
         l.reset_connection()
         self.assertIsInstance(l.connection, BrokerConnection)
+        l.stop_consumers()
 
         l.stop()
         l.close_connection()
@@ -225,7 +240,7 @@ class test_CarrotListener(unittest.TestCase):
         self.assertIsNone(l.task_consumer)
 
     def test_receive_message_control_command(self):
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                            send_events=False)
         backend = MockBackend()
         m = create_message(backend, control={"command": "shutdown"})
@@ -235,12 +250,12 @@ class test_CarrotListener(unittest.TestCase):
         self.assertIn("shutdown", l.control_dispatch.commands)
 
     def test_close_connection(self):
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                            send_events=False)
         l._state = RUN
         l.close_connection()
 
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                            send_events=False)
         eventer = l.event_dispatcher = MockEventDispatcher()
         heart = l.heart = MockHeart()
@@ -250,7 +265,7 @@ class test_CarrotListener(unittest.TestCase):
         self.assertTrue(heart.closed)
 
     def test_receive_message_unknown(self):
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                            send_events=False)
         backend = MockBackend()
         m = create_message(backend, unknown={"baz": "!!!"})
@@ -265,9 +280,34 @@ class test_CarrotListener(unittest.TestCase):
         context = catch_warnings(record=True)
         execute_context(context, with_catch_warnings)
 
+    def test_receive_message_eta_OverflowError(self):
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+                             send_events=False)
+        backend = MockBackend()
+        called = [False]
+
+        def to_timestamp(d):
+            called[0] = True
+            raise OverflowError()
+
+        m = create_message(backend, task=foo_task.name,
+                                    args=("2, 2"),
+                                    kwargs={},
+                                    eta=datetime.now().isoformat())
+        l.event_dispatcher = MockEventDispatcher()
+        l.control_dispatch = MockControlDispatch()
+
+        prev, listener.to_timestamp = listener.to_timestamp, to_timestamp
+        try:
+            l.receive_message(m.decode(), m)
+            self.assertTrue(m.acknowledged)
+            self.assertTrue(called[0])
+        finally:
+            listener.to_timestamp = prev
+
     def test_receive_message_InvalidTaskError(self):
         logger = MockLogger()
-        l = CarrotListener(self.ready_queue, self.eta_schedule, logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, logger,
                            send_events=False)
         backend = MockBackend()
         m = create_message(backend, task=foo_task.name,
@@ -280,7 +320,7 @@ class test_CarrotListener(unittest.TestCase):
 
     def test_on_decode_error(self):
         logger = MockLogger()
-        l = CarrotListener(self.ready_queue, self.eta_schedule, logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, logger,
                            send_events=False)
 
         class MockMessage(object):
@@ -298,7 +338,7 @@ class test_CarrotListener(unittest.TestCase):
         self.assertIn("Message decoding error", logger.logged[0])
 
     def test_receieve_message(self):
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                            send_events=False)
         backend = MockBackend()
         m = create_message(backend, task=foo_task.name,
@@ -321,29 +361,31 @@ class test_CarrotListener(unittest.TestCase):
             def qos(self, **kwargs):
                 self.prefetch_count_incremented = True
 
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
-                           send_events=False)
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+                             send_events=False)
         backend = MockBackend()
         m = create_message(backend, task=foo_task.name,
                            eta=datetime.now().isoformat(),
                            args=[2, 4, 8], kwargs={})
 
-        l.event_dispatcher = MockEventDispatcher()
         l.task_consumer = MockConsumer()
         l.qos = QoS(l.task_consumer, l.initial_prefetch_count, l.logger)
+        l.event_dispatcher = MockEventDispatcher()
         l.receive_message(m.decode(), m)
+        l.eta_schedule.stop()
 
         items = [entry[2] for entry in self.eta_schedule.queue]
         found = 0
         for item in items:
-            if item.task_name == foo_task.name:
+            if item.args[0].task_name == foo_task.name:
                 found = True
         self.assertTrue(found)
         self.assertTrue(l.task_consumer.prefetch_count_incremented)
+        l.eta_schedule.stop()
 
     def test_revoke(self):
         ready_queue = FastQueue()
-        l = CarrotListener(ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(ready_queue, self.eta_schedule, self.logger,
                            send_events=False)
         backend = MockBackend()
         id = gen_unique_id()
@@ -360,7 +402,7 @@ class test_CarrotListener(unittest.TestCase):
         self.assertTrue(ready_queue.empty())
 
     def test_receieve_message_not_registered(self):
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                           send_events=False)
         backend = MockBackend()
         m = create_message(backend, task="x.X.31x", args=[2, 4, 8], kwargs={})
@@ -371,8 +413,9 @@ class test_CarrotListener(unittest.TestCase):
         self.assertTrue(self.eta_schedule.empty())
 
     def test_receieve_message_eta(self):
-        l = CarrotListener(self.ready_queue, self.eta_schedule, self.logger,
+        l = MyCarrotListener(self.ready_queue, self.eta_schedule, self.logger,
                           send_events=False)
+        dispatcher = l.event_dispatcher = MockEventDispatcher()
         backend = MockBackend()
         m = create_message(backend, task=foo_task.name,
                            args=[2, 4, 8], kwargs={},
@@ -385,13 +428,16 @@ class test_CarrotListener(unittest.TestCase):
             l.reset_connection()
         finally:
             conf.BROKER_CONNECTION_RETRY = p
+        l.stop_consumers()
+        self.assertTrue(dispatcher.flushed)
+        l.event_dispatcher = MockEventDispatcher()
         l.receive_message(m.decode(), m)
-
+        l.eta_schedule.stop()
         in_hold = self.eta_schedule.queue[0]
-        self.assertEqual(len(in_hold), 4)
-        eta, priority, task, on_accept = in_hold
+        self.assertEqual(len(in_hold), 3)
+        eta, priority, entry = in_hold
+        task = entry.args[0]
         self.assertIsInstance(task, TaskRequest)
-        self.assertTrue(callable(on_accept))
         self.assertEqual(task.task_name, foo_task.name)
         self.assertEqual(task.execute(), 2 * 4 * 8)
         self.assertRaises(Empty, self.ready_queue.get_nowait)
@@ -405,7 +451,7 @@ class test_CarrotListener(unittest.TestCase):
             def update(self):
                 self.prev = self.next
 
-        class _Listener(CarrotListener):
+        class _Listener(MyCarrotListener):
             iterations = 0
             wait_method = None
 
@@ -417,9 +463,9 @@ class test_CarrotListener(unittest.TestCase):
                 return self.wait_method
 
         called_back = [False]
+
         def init_callback(listener):
             called_back[0] = True
-
 
         l = _Listener(self.ready_queue, self.eta_schedule, self.logger,
                       send_events=False, init_callback=init_callback)
@@ -439,6 +485,7 @@ class test_CarrotListener(unittest.TestCase):
         l = _Listener(self.ready_queue, self.eta_schedule, self.logger,
                       send_events=False, init_callback=init_callback)
         l.qos = _QoS()
+
         def raises_socket_error(limit=None):
             yield True
             l.iterations = 1
@@ -460,24 +507,24 @@ class test_WorkController(unittest.TestCase):
         conf.DISABLE_RATE_LIMITS = True
         try:
             worker = WorkController(concurrency=1, loglevel=0)
-            self.assertIsInstance(worker.ready_queue, FastQueue)
+            self.assertTrue(hasattr(worker.ready_queue, "put"))
         finally:
             conf.DISABLE_RATE_LIMITS = False
 
     def test_attrs(self):
         worker = self.worker
-        self.assertIsInstance(worker.eta_schedule, Scheduler)
+        self.assertIsInstance(worker.scheduler, Timer)
         self.assertTrue(worker.scheduler)
         self.assertTrue(worker.pool)
         self.assertTrue(worker.listener)
         self.assertTrue(worker.mediator)
         self.assertTrue(worker.components)
 
-    def test_with_embedded_clockservice(self):
+    def test_with_embedded_celerybeat(self):
         worker = WorkController(concurrency=1, loglevel=0,
                                 embed_clockservice=True)
-        self.assertTrue(worker.clockservice)
-        self.assertIn(worker.clockservice, worker.components)
+        self.assertTrue(worker.beat)
+        self.assertIn(worker.beat, worker.components)
 
     def test_process_task(self):
         worker = self.worker

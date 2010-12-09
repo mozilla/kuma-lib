@@ -1,4 +1,9 @@
+import os
+import sys
+
 from importlib import import_module
+
+from celery.utils.mail import mail_admins
 
 BUILTIN_MODULES = ["celery.task"]
 
@@ -37,6 +42,9 @@ class BaseLoader(object):
         pass
 
     def import_task_module(self, module):
+        return self.import_from_cwd(module)
+
+    def import_module(self, module):
         return import_module(module)
 
     def import_default_modules(self):
@@ -48,6 +56,30 @@ class BaseLoader(object):
         if not self.worker_initialized:
             self.worker_initialized = True
             self.on_worker_init()
+
+    def import_from_cwd(self, module, imp=None):
+        """Import module, but make sure it finds modules
+        located in the current directory.
+
+        Modules located in the current directory has
+        precedence over modules located in ``sys.path``.
+        """
+        if imp is None:
+            imp = self.import_module
+        cwd = os.getcwd()
+        if cwd in sys.path:
+            return imp(module)
+        sys.path.insert(0, cwd)
+        try:
+            return imp(module)
+        finally:
+            try:
+                sys.path.remove(cwd)
+            except ValueError:          # pragma: no cover
+                pass
+
+    def mail_admins(self, subject, body, fail_silently=False):
+        return mail_admins(subject, body, fail_silently=fail_silently)
 
     @property
     def conf(self):

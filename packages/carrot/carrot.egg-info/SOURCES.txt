@@ -23,6 +23,7 @@ carrot.egg-info/requires.txt
 carrot.egg-info/top_level.txt
 carrot/backends/__init__.py
 carrot/backends/base.py
+carrot/backends/librabbitmq.py
 carrot/backends/pikachu.py
 carrot/backends/pyamqplib.py
 carrot/backends/pystomp.py
@@ -33,6 +34,7 @@ docs/conf.py
 docs/faq.rst
 docs/index.rst
 docs/introduction.rst
+docs/.static/.keep
 docs/_ext/applyxrefs.py
 docs/_ext/literals_to_xrefs.py
 docs/_theme/agogo/layout.html

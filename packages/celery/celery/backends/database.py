@@ -1,11 +1,18 @@
 from datetime import datetime
 
-
 from celery import conf
+from celery import states
 from celery.backends.base import BaseDictBackend
 from celery.db.models import Task, TaskSet
 from celery.db.session import ResultSession
 from celery.exceptions import ImproperlyConfigured
+
+try:
+    import sqlalchemy as _
+except ImportError:
+    raise ImproperlyConfigured(
+        "The database result backend requires SQLAlchemy to be installed."
+        "See http://pypi.python.org/pypi/SQLAlchemy")
 
 
 class DatabaseBackend(BaseDictBackend):
@@ -49,11 +56,10 @@ class DatabaseBackend(BaseDictBackend):
         session = self.ResultSession()
         try:
             task = session.query(Task).filter(Task.task_id == task_id).first()
-            if not task:
+            if task is None:
                 task = Task(task_id)
-                session.add(task)
-                session.flush()
-                session.commit()
+                task.status = states.PENDING
+                task.result = None
             return task.to_dict()
         finally:
             session.close()
@@ -78,6 +84,15 @@ class DatabaseBackend(BaseDictBackend):
                     TaskSet.taskset_id == taskset_id).first()
             if taskset:
                 return taskset.to_dict()
+        finally:
+            session.close()
+
+    def _forget(self, task_id):
+        """Forget about result."""
+        session = self.ResultSession()
+        try:
+            session.query(Task).filter(Task.task_id == task_id).delete()
+            session.commit()
         finally:
             session.close()
 

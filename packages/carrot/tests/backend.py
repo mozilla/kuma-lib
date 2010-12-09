@@ -3,6 +3,9 @@ import sys
 import unittest
 import pickle
 import time
+
+from itertools import count
+
 sys.path.insert(0, os.pardir)
 sys.path.append(os.getcwd())
 
@@ -25,6 +28,7 @@ def fetch_next_message(consumer):
 
 
 class BackendMessagingCase(unittest.TestCase):
+    nextq = count(1).next
 
     def setUp(self):
         self.conn = establish_test_connection()
@@ -33,8 +37,9 @@ class BackendMessagingCase(unittest.TestCase):
         self.routing_key = TEST_ROUTING_KEY
 
     def create_consumer(self, **options):
+        queue = "%s%s" % (self.queue, self.nextq())
         return Consumer(connection=self.conn,
-                        queue=self.queue, exchange=self.exchange,
+                        queue=queue, exchange=self.exchange,
                         routing_key=self.routing_key, **options)
 
     def create_consumerset(self, queues={}, consumers=[], **options):
@@ -49,11 +54,12 @@ class BackendMessagingCase(unittest.TestCase):
                         **options)
 
     def test_regression_implied_auto_delete(self):
-        consumer = self.create_consumer(exclusive=True)
+        consumer = self.create_consumer(exclusive=True, auto_declare=False)
         self.assertTrue(consumer.auto_delete, "exclusive implies auto_delete")
         consumer.close()
 
-        consumer = self.create_consumer(durable=True, auto_delete=False)
+        consumer = self.create_consumer(durable=True, auto_delete=False,
+                                        auto_declare=False)
         self.assertFalse(consumer.auto_delete,
             """durable does *not* imply auto_delete.
             regression: http://github.com/ask/carrot/issues/closed#issue/2""")

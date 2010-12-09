@@ -3,12 +3,18 @@
 Process Pools.
 
 """
+import sys
+import traceback
 
 from celery import log
 from celery.datastructures import ExceptionInfo
 from celery.utils.functional import curry
 
 from celery.concurrency.processes.pool import Pool, RUN
+
+
+def pingback(i):
+    return i
 
 
 class TaskPool(object):
@@ -31,7 +37,7 @@ class TaskPool(object):
 
     def __init__(self, limit, logger=None, initializer=None,
             maxtasksperchild=None, timeout=None, soft_timeout=None,
-            putlocks=True):
+            putlocks=True, initargs=()):
         self.limit = limit
         self.logger = logger or log.get_default_logger()
         self.initializer = initializer
@@ -39,6 +45,7 @@ class TaskPool(object):
         self.timeout = timeout
         self.soft_timeout = soft_timeout
         self.putlocks = putlocks
+        self.initargs = initargs
         self._pool = None
 
     def start(self):
@@ -49,6 +56,7 @@ class TaskPool(object):
         """
         self._pool = self.Pool(processes=self.limit,
                                initializer=self.initializer,
+                               initargs=self.initargs,
                                timeout=self.timeout,
                                soft_timeout=self.soft_timeout,
                                maxtasksperchild=self.maxtasksperchild)
@@ -105,9 +113,19 @@ class TaskPool(object):
             if isinstance(ret_value.exception, (
                     SystemExit, KeyboardInterrupt)):
                 raise ret_value.exception
-            [errback(ret_value) for errback in errbacks]
+            [self.safe_apply_callback(errback, ret_value)
+                    for errback in errbacks]
         else:
-            [callback(ret_value) for callback in callbacks]
+            [self.safe_apply_callback(callback, ret_value)
+                    for callback in callbacks]
+
+    def safe_apply_callback(self, fun, *args):
+        try:
+            fun(*args)
+        except:
+            self.logger.error("Pool callback raised exception: %s" % (
+                traceback.format_exc(), ),
+                exc_info=sys.exc_info())
 
     @property
     def info(self):

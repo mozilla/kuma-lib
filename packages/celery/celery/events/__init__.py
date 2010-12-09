@@ -3,6 +3,7 @@ import socket
 import threading
 
 from collections import deque
+from itertools import count
 
 from celery.messaging import EventPublisher, EventConsumer
 
@@ -102,8 +103,9 @@ class EventReceiver(object):
     """
     handlers = {}
 
-    def __init__(self, connection, handlers=None):
+    def __init__(self, connection, handlers=None, wakeup=True):
         self.connection = connection
+        self.wakeup = wakeup
         if handlers is not None:
             self.handlers = handlers
 
@@ -118,7 +120,7 @@ class EventReceiver(object):
         consumer.register_callback(self._receive)
         return consumer
 
-    def capture(self, limit=None):
+    def capture(self, limit=None, timeout=None):
         """Open up a consumer capturing events.
 
         This has to run in the main process, and it will never
@@ -126,9 +128,23 @@ class EventReceiver(object):
 
         """
         consumer = self.consumer()
-        it = consumer.iterconsume(limit=limit)
-        while True:
-            it.next()
+        consumer.consume()
+        if self.wakeup:
+            from celery.task.control import broadcast
+            broadcast("heartbeat")
+        try:
+            for iteration in count(0):
+                if limit and iteration > limit:
+                    break
+                try:
+                    consumer.connection.drain_events(timeout=timeout)
+                except socket.timeout:
+                    if timeout:
+                        raise
+                except socket.error:
+                    pass
+        finally:
+            consumer.close()
 
     def _receive(self, message_data, message):
         type = message_data.pop("type").lower()

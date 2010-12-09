@@ -8,17 +8,16 @@ import logging
 import traceback
 from multiprocessing.util import Finalize
 
+from celery import beat
 from celery import conf
+from celery import log
 from celery import registry
-from celery import platform
+from celery import platforms
 from celery import signals
-from celery.log import setup_logger, _hijack_multiprocessing_logger
-from celery.beat import EmbeddedClockService
 from celery.utils import noop, instantiate
 
 from celery.worker import state
 from celery.worker.buckets import TaskBucket, FastQueue
-from celery.worker.scheduler import Scheduler
 
 RUN = 0x1
 CLOSE = 0x2
@@ -31,20 +30,15 @@ WORKER_SIGRESET = frozenset(["SIGTERM",
 WORKER_SIGIGNORE = frozenset(["SIGINT"])
 
 
-def process_initializer():
+def process_initializer(hostname):
     """Initializes the process so it can be used to process tasks.
 
     Used for multiprocessing environments.
 
     """
-    # There seems to a bug in multiprocessing (backport?)
-    # when detached, where the worker gets EOFErrors from time to time
-    # and the logger is left from the parent process causing a crash.
-    _hijack_multiprocessing_logger()
-
-    map(platform.reset_signal, WORKER_SIGRESET)
-    map(platform.ignore_signal, WORKER_SIGIGNORE)
-    platform.set_mp_process_title("celeryd")
+    map(platforms.reset_signal, WORKER_SIGRESET)
+    map(platforms.ignore_signal, WORKER_SIGIGNORE)
+    platforms.set_mp_process_title("celeryd", hostname=hostname)
 
     # This is for windows and other platforms not supporting
     # fork(). Note that init_worker makes sure it's only
@@ -61,7 +55,7 @@ class WorkController(object):
     :param concurrency: see :attr:`concurrency`.
     :param logfile: see :attr:`logfile`.
     :param loglevel: see :attr:`loglevel`.
-    :param embed_clockservice: see :attr:`run_clockservice`.
+    :param embed_clockservice: see :attr:`embed_clockservice`.
     :param send_events: see :attr:`send_events`.
 
     .. attribute:: concurrency
@@ -80,7 +74,7 @@ class WorkController(object):
 
     .. attribute:: embed_clockservice
 
-        If ``True``, celerybeat is embedded, running in the main worker
+        If :const:`True`, celerybeat is embedded, running in the main worker
         process as a thread.
 
     .. attribute:: send_events
@@ -131,13 +125,15 @@ class WorkController(object):
             task_soft_time_limit=conf.CELERYD_TASK_SOFT_TIME_LIMIT,
             max_tasks_per_child=conf.CELERYD_MAX_TASKS_PER_CHILD,
             pool_putlocks=conf.CELERYD_POOL_PUTLOCKS,
-            db=conf.CELERYD_STATE_DB):
+            disable_rate_limits=conf.DISABLE_RATE_LIMITS,
+            db=conf.CELERYD_STATE_DB,
+            scheduler_cls=conf.CELERYBEAT_SCHEDULER):
 
         # Options
         self.loglevel = loglevel or self.loglevel
         self.concurrency = concurrency or self.concurrency
         self.logfile = logfile or self.logfile
-        self.logger = setup_logger(loglevel, logfile)
+        self.logger = log.get_default_logger()
         self.hostname = hostname or socket.gethostname()
         self.embed_clockservice = embed_clockservice
         self.ready_callback = ready_callback
@@ -146,6 +142,8 @@ class WorkController(object):
         self.task_soft_time_limit = task_soft_time_limit
         self.max_tasks_per_child = max_tasks_per_child
         self.pool_putlocks = pool_putlocks
+        self.timer_debug = log.SilenceRepeated(self.logger.debug,
+                                               max_iterations=10)
         self.db = db
         self._finalize = Finalize(self, self.stop, exitpriority=1)
 
@@ -154,11 +152,11 @@ class WorkController(object):
             Finalize(persistence, persistence.save, exitpriority=5)
 
         # Queues
-        if conf.DISABLE_RATE_LIMITS:
+        if disable_rate_limits:
             self.ready_queue = FastQueue()
+            self.ready_queue.put = self.process_task
         else:
             self.ready_queue = TaskBucket(task_registry=registry.tasks)
-        self.eta_schedule = Scheduler(self.ready_queue, logger=self.logger)
 
         self.logger.debug("Instantiating thread components...")
 
@@ -166,25 +164,32 @@ class WorkController(object):
         self.pool = instantiate(pool_cls, self.concurrency,
                                 logger=self.logger,
                                 initializer=process_initializer,
+                                initargs=(self.hostname, ),
                                 maxtasksperchild=self.max_tasks_per_child,
                                 timeout=self.task_time_limit,
                                 soft_timeout=self.task_soft_time_limit,
                                 putlocks=self.pool_putlocks)
-        self.mediator = instantiate(mediator_cls, self.ready_queue,
-                                    callback=self.process_task,
-                                    logger=self.logger)
-        self.scheduler = instantiate(eta_scheduler_cls,
-                                     self.eta_schedule, logger=self.logger)
 
-        self.clockservice = None
+        self.mediator = None
+        if not disable_rate_limits:
+            self.mediator = instantiate(mediator_cls, self.ready_queue,
+                                        callback=self.process_task,
+                                        logger=self.logger)
+        self.scheduler = instantiate(eta_scheduler_cls,
+                               precision=conf.CELERYD_ETA_SCHEDULER_PRECISION,
+                               on_error=self.on_timer_error,
+                               on_tick=self.on_timer_tick)
+
+        self.beat = None
         if self.embed_clockservice:
-            self.clockservice = EmbeddedClockService(logger=self.logger,
-                                    schedule_filename=schedule_filename)
+            self.beat = beat.EmbeddedService(logger=self.logger,
+                                    schedule_filename=schedule_filename,
+                                    scheduler_cls=scheduler_cls)
 
         prefetch_count = self.concurrency * conf.CELERYD_PREFETCH_MULTIPLIER
         self.listener = instantiate(listener_cls,
                                     self.ready_queue,
-                                    self.eta_schedule,
+                                    self.scheduler,
                                     logger=self.logger,
                                     hostname=self.hostname,
                                     send_events=self.send_events,
@@ -198,7 +203,7 @@ class WorkController(object):
         self.components = filter(None, (self.pool,
                                         self.mediator,
                                         self.scheduler,
-                                        self.clockservice,
+                                        self.beat,
                                         self.listener))
 
     def start(self):
@@ -252,3 +257,10 @@ class WorkController(object):
 
         self.listener.close_connection()
         self._state = TERMINATE
+
+    def on_timer_error(self, exc_info):
+        _, exc, _ = exc_info
+        self.logger.error("Timer error: %r" % (exc, ))
+
+    def on_timer_tick(self, delay):
+        self.timer_debug("Scheduler wake-up! Next eta %s secs." % delay)

@@ -1,8 +1,8 @@
+import sys
 from datetime import datetime
 
 from celery import conf
 from celery import log
-from celery.backends import default_backend
 from celery.registry import tasks
 from celery.utils import timeutils
 from celery.worker import state
@@ -13,16 +13,9 @@ TASK_INFO_FIELDS = ("exchange", "routing_key", "rate_limit")
 
 
 @Panel.register
-def revoke(panel, task_id, task_name=None, **kwargs):
+def revoke(panel, task_id, **kwargs):
     """Revoke task by task id."""
     revoked.add(task_id)
-    backend = default_backend
-    if task_name: # Use custom task backend (if any)
-        try:
-            backend = tasks[task_name].backend
-        except KeyError:
-            pass
-    backend.mark_as_revoked(task_id)
     panel.logger.warn("Task %s revoked" % (task_id, ))
     return {"ok": "task %s revoked" % (task_id, )}
 
@@ -47,6 +40,14 @@ def disable_events(panel):
         panel.logger.warn("Events disabled by remote.")
         return {"ok": "events disabled"}
     return {"ok": "events already disabled"}
+
+
+@Panel.register
+def heartbeat(panel):
+    panel.logger.info("Heartbeat requested by remote.")
+    dispatcher = panel.listener.event_dispatcher
+    if dispatcher.enabled:
+        dispatcher.send("worker-heartbeat")
 
 
 @Panel.register
@@ -78,7 +79,7 @@ def rate_limit(panel, task_name, rate_limit, **kwargs):
         tasks[task_name].rate_limit = rate_limit
     except KeyError:
         panel.logger.error("Rate limit attempt for unknown task %s" % (
-            task_name, ))
+            task_name, ), exc_info=sys.exc_info())
         return {"error": "unknown task"}
 
     if conf.DISABLE_RATE_LIMITS:
@@ -99,7 +100,7 @@ def rate_limit(panel, task_name, rate_limit, **kwargs):
 
 @Panel.register
 def dump_schedule(panel, safe=False, **kwargs):
-    schedule = panel.listener.eta_schedule
+    schedule = panel.listener.eta_schedule.schedule
     if not schedule.queue:
         panel.logger.info("--Empty schedule--")
         return []
@@ -115,7 +116,8 @@ def dump_schedule(panel, safe=False, **kwargs):
     for item in schedule.info():
         scheduled_tasks.append({"eta": item["eta"],
                                 "priority": item["priority"],
-                                "request": item["item"].info(safe=safe)})
+                                "request":
+                                    item["item"].args[0].info(safe=safe)})
     return scheduled_tasks
 
 
@@ -141,6 +143,7 @@ def dump_active(panel, safe=False, **kwargs):
 @Panel.register
 def stats(panel, **kwargs):
     return {"total": state.total_count,
+            "listener": panel.listener.info,
             "pool": panel.listener.pool.info}
 
 
@@ -178,3 +181,25 @@ def ping(panel, **kwargs):
 def shutdown(panel, **kwargs):
     panel.logger.critical("Got shutdown from remote.")
     raise SystemExit("Got shutdown from remote")
+
+
+@Panel.register
+def add_consumer(panel, queue=None, exchange=None, exchange_type="direct",
+        routing_key=None, **options):
+    cset = panel.listener.task_consumer
+    declaration = dict(queue=queue,
+                       exchange=exchange,
+                       exchange_type=exchange_type,
+                       routing_key=routing_key,
+                       **options)
+    cset.add_consumer_from_dict(**declaration)
+    cset.consume()
+    panel.logger.info("Started consuming from %r" % (declaration, ))
+    return {"ok": "started consuming from %s" % (queue, )}
+
+
+@Panel.register
+def cancel_consumer(panel, queue=None, **_):
+    cset = panel.listener.task_consumer
+    cset.cancel_by_queue(queue)
+    return {"ok": "no longer consuming from %s" % (queue, )}

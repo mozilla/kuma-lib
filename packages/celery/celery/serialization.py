@@ -55,7 +55,7 @@ def find_nearest_pickleable_exception(exc):
     :param exc: An exception instance.
 
     :returns: the nearest exception if it's not :exc:`Exception` or below,
-        if it is it returns ``None``.
+        if it is it returns :const:`None`.
 
     :rtype :exc:`Exception`:
 
@@ -70,7 +70,6 @@ def find_nearest_pickleable_exception(exc):
             return
         # Use inspect.getmro() to traverse bases instead.
         getmro_ = lambda: inspect.getmro(cls)
-
 
     for supercls in getmro_():
         if supercls in unwanted_base_classes:

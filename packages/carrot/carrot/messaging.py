@@ -194,11 +194,14 @@ class Consumer(object):
     warn_if_exists = False
     auto_declare = True
     auto_ack = False
+    queue_arguments = None
     no_ack = False
     _closed = True
     _init_opts = ("durable", "exclusive", "auto_delete",
                   "exchange_type", "warn_if_exists",
-                  "auto_ack", "auto_declare")
+                  "auto_ack", "auto_declare",
+                  "queue_arguments")
+    _next_consumer_tag = count(1).next
 
     def __init__(self, connection, queue=None, exchange=None,
             routing_key=None, **kwargs):
@@ -247,10 +250,10 @@ class Consumer(object):
         :rtype string:
 
         """
-        return "%s.%s-%s" % (
+        return "%s.%s%s" % (
                 self.__class__.__module__,
                 self.__class__.__name__,
-                gen_unique_id())
+                self._next_consumer_tag())
 
     def declare(self):
         """Declares the queue, the exchange and binds the queue to
@@ -264,6 +267,7 @@ class Consumer(object):
             self.backend.queue_declare(queue=self.queue, durable=self.durable,
                                        exclusive=self.exclusive,
                                        auto_delete=self.auto_delete,
+                                       arguments=self.queue_arguments,
                                        warn_if_exists=self.warn_if_exists)
         if self.exchange:
             self.backend.exchange_declare(exchange=self.exchange,
@@ -652,6 +656,7 @@ class Publisher(object):
         if self.auto_declare and self.exchange:
             self.declare()
 
+
     def declare(self):
         """Declare the exchange.
 
@@ -659,16 +664,14 @@ class Publisher(object):
 
         """
         self.backend.exchange_declare(exchange=self.exchange,
-                                        type=self.exchange_type,
-                                          durable=self.durable,
-                                          auto_delete=self.auto_delete)
+                                      type=self.exchange_type,
+                                      durable=self.durable,
+                                      auto_delete=self.auto_delete)
 
     def __enter__(self):
         return self
 
     def __exit__(self, e_type, e_value, e_trace):
-        if e_type:
-            raise e_type(e_value)
         self.close()
 
     def create_message(self, message_data, delivery_mode=None, priority=None,
@@ -705,7 +708,7 @@ class Publisher(object):
 
     def send(self, message_data, routing_key=None, delivery_mode=None,
             mandatory=False, immediate=False, priority=0, content_type=None,
-            content_encoding=None, serializer=None):
+            content_encoding=None, serializer=None, exchange=None):
         """Send a message.
 
         :param message_data: The message data to send. Can be a list,
@@ -743,6 +746,9 @@ class Publisher(object):
 
         :keyword serializer: Override the default :attr:`serializer`.
 
+        :keyword exchange: Override the exchange to publish to.
+            Note that this exchange must have been declared.
+
         """
         headers = None
         routing_key = routing_key or self.routing_key
@@ -750,6 +756,7 @@ class Publisher(object):
         if self.exchange_type == "headers":
             headers, routing_key = routing_key, ""
 
+        exchange = exchange or self.exchange
 
         message = self.create_message(message_data, priority=priority,
                                       delivery_mode=delivery_mode,
@@ -757,7 +764,7 @@ class Publisher(object):
                                       content_encoding=content_encoding,
                                       serializer=serializer)
         self.backend.publish(message,
-                             exchange=self.exchange, routing_key=routing_key,
+                             exchange=exchange, routing_key=routing_key,
                              mandatory=mandatory, immediate=immediate,
                              headers=headers)
 
@@ -880,7 +887,7 @@ class ConsumerSet(object):
         self.from_dict = from_dict or {}
         self.consumers = []
         self.callbacks = callbacks or []
-        self._open_consumers = []
+        self._open_consumers = {}
 
         self.backend = self.connection.create_backend()
 
@@ -904,6 +911,7 @@ class ConsumerSet(object):
         consumer = Consumer(self.connection, queue=queue,
                 backend=self.backend, **options)
         self.consumers.append(consumer)
+        return consumer
 
     def add_consumer(self, consumer):
         """Add another consumer from a :class:`Consumer` instance."""
@@ -926,16 +934,17 @@ class ConsumerSet(object):
     def _declare_consumer(self, consumer, nowait=False):
         """Declare consumer so messages can be received from it using
         :meth:`iterconsume`."""
-        # Use the ConsumerSet's consumer by default, but if the
-        # child consumer has a callback, honor it.
-        callback = consumer.callbacks and \
+        if consumer.queue not in self._open_consumers:
+            # Use the ConsumerSet's consumer by default, but if the
+            # child consumer has a callback, honor it.
+            callback = consumer.callbacks and \
                 consumer._receive_callback or self._receive_callback
-        self.backend.declare_consumer(queue=consumer.queue,
-                                      no_ack=consumer.no_ack,
-                                      nowait=nowait,
-                                      callback=callback,
-                                      consumer_tag=consumer.consumer_tag)
-        self._open_consumers.append(consumer.consumer_tag)
+            self.backend.declare_consumer(queue=consumer.queue,
+                                          no_ack=consumer.no_ack,
+                                          nowait=nowait,
+                                          callback=callback,
+                                          consumer_tag=consumer.consumer_tag)
+            self._open_consumers[consumer.queue] = consumer.consumer_tag
 
     def consume(self):
         """Declare consumers."""
@@ -978,12 +987,16 @@ class ConsumerSet(object):
 
     def cancel(self):
         """Cancel a running :meth:`iterconsume` session."""
-        for consumer_tag in self._open_consumers:
+        for consumer_tag in self._open_consumers.values():
             try:
                 self.backend.cancel(consumer_tag)
             except KeyError:
                 pass
-        self._open_consumers = []
+        self._open_consumers.clear()
+
+    def cancel_by_queue(self, queue):
+        consumer_tag = self._open_consumers.pop(queue)
+        self.backend.cancel(consumer_tag)
 
     def close(self):
         """Close all consumers."""

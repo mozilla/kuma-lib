@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from carrot.utils import partition
 
@@ -9,6 +9,8 @@ RATE_MODIFIER_MAP = {"s": lambda n: n,
                      "m": lambda n: n / 60.0,
                      "h": lambda n: n / 60.0 / 60.0}
 
+HAVE_TIMEDELTA_TOTAL_SECONDS = hasattr(timedelta, "total_seconds")
+
 
 def timedelta_seconds(delta):
     """Convert :class:`datetime.timedelta` to seconds.
@@ -16,6 +18,9 @@ def timedelta_seconds(delta):
     Doesn't account for negative values.
 
     """
+    if HAVE_TIMEDELTA_TOTAL_SECONDS:
+        # Should return 0 for negative seconds
+        return max(delta.total_seconds(), 0)
     if delta.days < 0:
         return 0
     return delta.days * 86400 + delta.seconds + (delta.microseconds / 10e5)
@@ -46,15 +51,15 @@ def delta_resolution(dt, delta):
 def remaining(start, ends_in, now=None, relative=True):
     """Calculate the remaining time for a start date and a timedelta.
 
-    E.g. "how many seconds left for 30 seconds after ``start``?"
+    e.g. "how many seconds left for 30 seconds after start?"
 
-    :param start: Start :class:`datetime.datetime`.
-    :param ends_in: The end delta as a :class:`datetime.timedelta`.
-
-    :keyword relative: If set to ``False``, the end time will be calculated
-        using :func:`delta_resolution` (i.e. rounded to the resolution
-          of ``ends_in``).
-    :keyword now: The current time, defaults to :func:`datetime.now`.
+    :param start: Start :class:`~datetime.datetime`.
+    :param ends_in: The end delta as a :class:`~datetime.timedelta`.
+    :keyword relative: If set to :const:`False`, the end time will be
+        calculated using :func:`delta_resolution` (i.e. rounded to the
+        resolution of ``ends_in``).
+    :keyword now: Function returning the current time and date,
+        defaults to :func:`datetime.now`.
 
     """
     now = now or datetime.now()

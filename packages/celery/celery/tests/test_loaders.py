@@ -7,7 +7,8 @@ from celery import loaders
 from celery.loaders import base
 from celery.loaders import default
 
-from celery.tests.utils import with_environ
+from celery.tests.compat import catch_warnings
+from celery.tests.utils import with_environ, execute_context
 
 
 class TestLoaders(unittest.TestCase):
@@ -85,3 +86,37 @@ class TestDefaultLoader(unittest.TestCase):
             l.on_worker_init()
         finally:
             sys.modules[configname] = prevconfig
+
+    def test_import_from_cwd(self):
+        l = default.Loader()
+        old_path = list(sys.path)
+        try:
+            sys.path.remove(os.getcwd())
+        except ValueError:
+            pass
+        celery = sys.modules.pop("celery", None)
+        try:
+            self.assertTrue(l.import_from_cwd("celery"))
+            sys.modules.pop("celery", None)
+            sys.path.insert(0, os.getcwd())
+            self.assertTrue(l.import_from_cwd("celery"))
+        finally:
+            sys.path = old_path
+            sys.modules["celery"] = celery
+
+    def test_unconfigured_settings(self):
+        context_executed = [False]
+
+        class _Loader(default.Loader):
+
+            def import_from_cwd(self, name):
+                raise ImportError(name)
+
+        def with_catch_warnings(log):
+            l = _Loader()
+            self.assertEqual(l.conf.CELERY_RESULT_BACKEND, "amqp")
+            context_executed[0] = True
+
+        context = catch_warnings(record=True)
+        execute_context(context, with_catch_warnings)
+        self.assertTrue(context_executed[0])

@@ -33,6 +33,7 @@ Thank you for your patience!
 
 """
 
+
 class subtask(AttributeDict):
     """Class that wraps the arguments and execution options
     for a single task invocation.
@@ -70,8 +71,9 @@ class subtask(AttributeDict):
         except AttributeError:
             task_name = task
 
-        init(task=task_name, args=tuple(args or ()), kwargs=kwargs or (),
-             options=options or ())
+        init(task=task_name, args=tuple(args or ()),
+                             kwargs=dict(kwargs or {}, **extra),
+                             options=options or {})
 
     def delay(self, *argmerge, **kwmerge):
         """Shortcut to ``apply_async(argmerge, kwargs)``."""
@@ -123,8 +125,10 @@ class TaskSet(UserList):
         >>> list_of_return_values = taskset_result.join()
 
     """
-    _task = None # compat
-    _task_name = None # compat
+    Publisher = TaskPublisher
+
+    _task = None                                                # compat
+    _task_name = None                                           # compat
 
     def __init__(self, task=None, tasks=None):
         if task is not None:
@@ -180,7 +184,7 @@ class TaskSet(UserList):
             return self.apply()
 
         taskset_id = gen_unique_id()
-        publisher = TaskPublisher(connection=connection)
+        publisher = self.Publisher(connection=connection)
         try:
             results = [task.apply_async(taskset_id=taskset_id,
                                         publisher=publisher)

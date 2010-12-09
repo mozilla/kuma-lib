@@ -1,6 +1,7 @@
 """celery.backends.amqp"""
 import socket
 import time
+import warnings
 
 from datetime import timedelta
 
@@ -12,6 +13,10 @@ from celery.backends.base import BaseDictBackend
 from celery.exceptions import TimeoutError
 from celery.messaging import establish_connection
 from celery.utils import timeutils
+
+
+class AMQResultWarning(UserWarning):
+    pass
 
 
 class ResultPublisher(Publisher):
@@ -35,11 +40,8 @@ class ResultConsumer(Consumer):
     no_ack = True
     auto_delete = True
 
-    def __init__(self, connection, task_id, expires=None, **kwargs):
+    def __init__(self, connection, task_id, **kwargs):
         routing_key = task_id.replace("-", "")
-        if expires is not None:
-            pass
-            #self.queue_arguments = {"x-expires": expires}
         super(ResultConsumer, self).__init__(connection,
                 queue=routing_key, routing_key=routing_key, **kwargs)
 
@@ -60,6 +62,7 @@ class AMQPBackend(BaseDictBackend):
             persistent=None, serializer=None, auto_delete=None,
             expires=None, **kwargs):
         self._connection = connection
+        self.queue_arguments = {}
         self.exchange = exchange
         self.exchange_type = exchange_type
         self.persistent = persistent
@@ -67,11 +70,15 @@ class AMQPBackend(BaseDictBackend):
         self.auto_delete = auto_delete
         self.expires = expires
         if self.expires is None:
-            self.expires = conf.TASK_RESULT_EXPIRES
+            self.expires = conf.AMQP_TASK_RESULT_EXPIRES
         if isinstance(self.expires, timedelta):
             self.expires = timeutils.timedelta_seconds(self.expires)
         if self.expires is not None:
             self.expires = int(self.expires)
+            # WARNING: Requries RabbitMQ 2.1.0 or higher.
+            # x-expires must be a signed-int, or long describing the
+            # expiry time in milliseconds.
+            self.queue_arguments["x-expires"] = int(self.expires * 1000.0)
         super(AMQPBackend, self).__init__(**kwargs)
 
     def _create_publisher(self, task_id, connection):
@@ -93,9 +100,10 @@ class AMQPBackend(BaseDictBackend):
                               exchange_type=self.exchange_type,
                               durable=self.persistent,
                               auto_delete=self.auto_delete,
-                              expires=self.expires)
+                              queue_arguments=self.queue_arguments)
 
-    def store_result(self, task_id, result, status, traceback=None):
+    def store_result(self, task_id, result, status, traceback=None,
+            max_retries=20, retry_delay=0.2):
         """Send task return value and status."""
         result = self.encode_result(result, status)
 
@@ -104,20 +112,33 @@ class AMQPBackend(BaseDictBackend):
                 "status": status,
                 "traceback": traceback}
 
-        publisher = self._create_publisher(task_id, self.connection)
-        try:
-            publisher.send(meta)
-        finally:
-            publisher.close()
+        for i in range(max_retries + 1):
+            try:
+                publisher = self._create_publisher(task_id, self.connection)
+                publisher.send(meta)
+                publisher.close()
+            except Exception, exc:
+                if not max_retries:
+                    raise
+                self._connection = None
+                warnings.warn(AMQResultWarning(
+                    "Error sending result %s: %r" % (task_id, exc)))
+                time.sleep(retry_delay)
+            break
 
         return result
 
     def get_task_meta(self, task_id, cache=True):
+        if cache and task_id in self._cache:
+            return self._cache[task_id]
+
         return self.poll(task_id)
 
     def wait_for(self, task_id, timeout=None, cache=True):
-        if task_id in self._cache:
-            meta = self._cache[task_id]
+        cached_meta = self._cache.get(task_id)
+
+        if cached_meta and cached_meta["status"] in states.READY_STATES:
+            meta = cached_meta
         else:
             try:
                 meta = self.consume(task_id, timeout=timeout)
@@ -128,12 +149,17 @@ class AMQPBackend(BaseDictBackend):
             return meta["result"]
         elif meta["status"] in states.PROPAGATE_STATES:
             raise self.exception_to_python(meta["result"])
+        else:
+            return self.wait_for(task_id, timeout, cache)
 
     def poll(self, task_id):
         consumer = self._create_consumer(task_id, self.connection)
         result = consumer.fetch()
         try:
             if result:
+                consumer.backend.queue_delete(queue=consumer.queue,
+                                              if_unused=True,
+                                              if_empty=True)
                 payload = self._cache[task_id] = result.payload
                 return payload
             else:
@@ -149,8 +175,9 @@ class AMQPBackend(BaseDictBackend):
     def consume(self, task_id, timeout=None):
         results = []
 
-        def callback(message_data, message):
-            results.append(message_data)
+        def callback(meta, message):
+            if meta["status"] in states.READY_STATES:
+                results.append(meta)
 
         wait = self.connection.drain_events
         consumer = self._create_consumer(task_id, self.connection)

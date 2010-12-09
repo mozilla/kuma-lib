@@ -1,4 +1,4 @@
-:Version: 2.0.3
+:Version: 2.1.4
 :Web: http://celeryproject.org/
 :Download: http://pypi.python.org/pypi/celery/
 :Source: http://github.com/ask/celery/
@@ -7,34 +7,43 @@
 
 --
 
+.. _celery-synopsis:
+
 Celery is an open source asynchronous task queue/job queue based on
-distributed message passing. It is focused on real-time operation,
+distributed message passing.  It is focused on real-time operation,
 but supports scheduling as well.
 
-The execution units, called tasks, are executed concurrently on a single or
-more worker servers. Tasks can execute asynchronously (in the background) or synchronously
-(wait until ready).
+The execution units, called tasks, are executed concurrently on one or
+more worker nodes.  Tasks can execute asynchronously (in the background) or
+synchronously (wait until ready).
 
 Celery is already used in production to process millions of tasks a day.
 
 Celery is written in Python, but the protocol can be implemented in any
-language. It can also `operate with other languages using webhooks`_.
+language.  It can also `operate with other languages using webhooks`_.
 
 The recommended message broker is `RabbitMQ`_, but support for `Redis`_ and
 databases (`SQLAlchemy`_) is also available.
 
-You may also be pleased to know that full Django integration exists,
-delivered by the `django-celery`_ package.
+Celery is easy to integrate with `Django`_, `Pylons`_ and `Flask`_, using
+the `django-celery`_, `celery-pylons`_ and `Flask-Celery`_ add-on packages.
 
 .. _`RabbitMQ`: http://www.rabbitmq.com/
 .. _`Redis`: http://code.google.com/p/redis/
 .. _`SQLAlchemy`: http://www.sqlalchemy.org/
+.. _`Django`: http://djangoproject.org/
+.. _`Pylons`: http://pylonshq.com/
+.. _`Flask`: http://flask.pocoo.org/
 .. _`django-celery`: http://pypi.python.org/pypi/django-celery
+.. _`celery-pylons`: http://pypi.python.org/pypi/celery-pylons
+.. _`Flask-Celery`: http://github.com/ask/flask-celery/
 .. _`operate with other languages using webhooks`:
     http://ask.github.com/celery/userguide/remote-tasks.html
 
 .. contents::
     :local:
+
+.. _celery-overview:
 
 Overview
 ========
@@ -43,12 +52,14 @@ This is a high level overview of the architecture.
 
 .. image:: http://cloud.github.com/downloads/ask/celery/Celery-Overview-v4.jpg
 
-The broker pushes tasks to the worker servers.
-A worker server is a networked machine running ``celeryd``. This can be one or
+The broker delivers tasks to the worker servers.
+A worker server is a networked machine running ``celeryd``.  This can be one or
 more machines depending on the workload.
 
 The result of the task can be stored for later retrieval (called its
 "tombstone").
+
+.. _celery-example:
 
 Example
 =======
@@ -71,6 +82,8 @@ You can execute the task in the background, or wait for it to finish::
     8
 
 Simple!
+
+.. _celery-features:
 
 Features
 ========
@@ -161,6 +174,8 @@ Features
 .. _`MongoDB`: http://www.mongodb.org/
 .. _`Tokyo Tyrant`: http://tokyocabinet.sourceforge.net/
 
+.. _celery-documentation:
+
 Documentation
 =============
 
@@ -169,8 +184,10 @@ is hosted at Github.
 
 .. _`latest documentation`: http://ask.github.com/celery/
 
+.. _celery-installation:
+
 Installation
-=============
+============
 
 You can install ``celery`` either via the Python Package Index (PyPI)
 or from source.
@@ -182,6 +199,8 @@ To install using ``pip``,::
 To install using ``easy_install``,::
 
     $ easy_install celery
+
+.. _celery-installing-from-source:
 
 Downloading and installing from source
 --------------------------------------
@@ -196,8 +215,10 @@ You can install it by doing the following,::
     $ python setup.py build
     # python setup.py install # as root
 
+.. _celery-installing-from-git:
+
 Using the development version
-------------------------------
+-----------------------------
 
 You can clone the repository by doing the following::
 

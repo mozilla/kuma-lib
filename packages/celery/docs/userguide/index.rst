@@ -1,3 +1,5 @@
+.. _guide:
+
 ============
  User Guide
 ============
@@ -8,9 +10,13 @@
 .. toctree::
     :maxdepth: 2
 
+    overview
     tasks
     executing
     workers
+    periodic-tasks
     tasksets
     remote-tasks
     routing
+    monitoring
+    optimizing

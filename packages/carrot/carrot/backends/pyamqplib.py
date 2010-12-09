@@ -5,6 +5,12 @@
 .. _`amqplib`: http://barryp.org/software/py-amqplib/
 
 """
+from amqplib.client_0_8 import transport
+# amqplib's handshake mistakenly identifies as protocol version 1191,
+# this breaks in RabbitMQ tip, which no longer falls back to
+# 0-8 for unknown ids.
+transport.AMQP_PROTOCOL_HEADER = "AMQP\x01\x01\x08\x00"
+
 from amqplib import client_0_8 as amqp
 from amqplib.client_0_8.exceptions import AMQPChannelException
 from amqplib.client_0_8.serialization import AMQPReader, AMQPWriter
@@ -14,6 +20,8 @@ import warnings
 import weakref
 
 DEFAULT_PORT = 5672
+
+
 
 
 class Connection(amqp.Connection):
@@ -176,7 +184,8 @@ class Backend(BaseBackend):
     def channel(self):
         """If no channel exists, a new one is requested."""
         if not self._channel:
-            self._channel_ref = weakref.ref(self.connection.get_channel())
+            connection = self.connection.connection
+            self._channel_ref = weakref.ref(connection.channel())
         return self._channel
 
     def establish_connection(self):
@@ -184,6 +193,10 @@ class Backend(BaseBackend):
         conninfo = self.connection
         if not conninfo.hostname:
             raise KeyError("Missing hostname for AMQP connection.")
+        if conninfo.userid is None:
+            raise KeyError("Missing user id for AMQP connection.")
+        if conninfo.password is None:
+            raise KeyError("Missing password for AMQP connection.")
         if not conninfo.port:
             conninfo.port = self.default_port
         return Connection(host=conninfo.host,
@@ -223,9 +236,8 @@ class Backend(BaseBackend):
         return self.channel.queue_purge(queue=queue)
 
     def queue_declare(self, queue, durable, exclusive, auto_delete,
-            warn_if_exists=False):
+            warn_if_exists=False, arguments=None):
         """Declare a named queue."""
-
         if warn_if_exists and self.queue_exists(queue):
             warnings.warn(QueueAlreadyExistsWarning(
                 QueueAlreadyExistsWarning.__doc__))
@@ -233,7 +245,8 @@ class Backend(BaseBackend):
         return self.channel.queue_declare(queue=queue,
                                           durable=durable,
                                           exclusive=exclusive,
-                                          auto_delete=auto_delete)
+                                          auto_delete=auto_delete,
+                                          arguments=arguments)
 
     def exchange_declare(self, exchange, type, durable, auto_delete):
         """Declare an named exchange."""

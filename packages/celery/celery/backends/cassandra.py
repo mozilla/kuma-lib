@@ -2,7 +2,7 @@
 try:
     import pycassa
     from thrift import Thrift
-    C = __import__('cassandra').ttypes # FIXME: Namespace kludge
+    C = __import__('cassandra').ttypes          # FIXME Namespace kludge
 except ImportError:
     pycassa = None
 
@@ -47,7 +47,7 @@ class CassandraBackend(BaseDictBackend):
         """Initialize Cassandra backend.
 
         Raises :class:`celery.exceptions.ImproperlyConfigured` if
-        the ``CASSANDRA_SERVERS`` setting is not set.
+        the :setting:`CASSANDRA_SERVERS` setting is not set.
 
         """
         self.logger = setup_logger("celery.backends.cassandra")
@@ -156,8 +156,9 @@ class CassandraBackend(BaseDictBackend):
 
         cf = self._get_column_family()
         column_parent = C.ColumnParent(cf.column_family)
-        slice_pred = C.SlicePredicate(slice_range=C.SliceRange('', end_column,
-                                                               count=2**30))
+        slice_pred = C.SlicePredicate(
+                        slice_range=C.SliceRange('', end_column,
+                                                 count=2 ** 30))
         columns = cf.client.multiget_slice(cf.keyspace, self._index_keys,
                                            column_parent, slice_pred,
                                            pycassa.ConsistencyLevel.DCQUORUM)

@@ -287,58 +287,130 @@ except ImportError:
             return "defaultdict(%s, %s)" % (self.default_factory,
                                             dict.__repr__(self))
     import collections
-    collections.defaultdict = defaultdict # Pickle needs this.
+    collections.defaultdict = defaultdict               # Pickle needs this.
 
 ############## logging.LoggerAdapter ########################################
+import inspect
+import logging
+import multiprocessing
+import sys
+
+from logging import LogRecord
+
+log_takes_extra = "extra" in inspect.getargspec(logging.Logger._log)[0]
+
+# The func argument to LogRecord was added in 2.5
+if "func" not in inspect.getargspec(LogRecord.__init__)[0]:
+    def LogRecord(name, level, fn, lno, msg, args, exc_info, func):
+        return logging.LogRecord(name, level, fn, lno, msg, args, exc_info)
+
+
+def _checkLevel(level):
+    if isinstance(level, int):
+        rv = level
+    elif str(level) == level:
+        if level not in logging._levelNames:
+            raise ValueError("Unknown level: %r" % level)
+        rv = logging._levelNames[level]
+    else:
+        raise TypeError("Level not an integer or a valid string: %r" % level)
+    return rv
+
+
+class _CompatLoggerAdapter(object):
+
+    def __init__(self, logger, extra):
+        self.logger = logger
+        self.extra = extra
+
+    def setLevel(self, level):
+        self.logger.level = _checkLevel(level)
+
+    def process(self, msg, kwargs):
+        kwargs["extra"] = self.extra
+        return msg, kwargs
+
+    def debug(self, msg, *args, **kwargs):
+        self.log(logging.DEBUG, msg, *args, **kwargs)
+
+    def info(self, msg, *args, **kwargs):
+        self.log(logging.INFO, msg, *args, **kwargs)
+
+    def warning(self, msg, *args, **kwargs):
+        self.log(logging.WARNING, msg, *args, **kwargs)
+    warn = warning
+
+    def error(self, msg, *args, **kwargs):
+        self.log(logging.ERROR, msg, *args, **kwargs)
+
+    def exception(self, msg, *args, **kwargs):
+        kwargs.setdefault("exc_info", 1)
+        self.error(msg, *args, **kwargs)
+
+    def critical(self, msg, *args, **kwargs):
+        self.log(logging.CRITICAL, msg, *args, **kwargs)
+    fatal = critical
+
+    def log(self, level, msg, *args, **kwargs):
+        if self.logger.isEnabledFor(level):
+            msg, kwargs = self.process(msg, kwargs)
+            self._log(level, msg, args, **kwargs)
+
+    def makeRecord(self, name, level, fn, lno, msg, args, exc_info,
+            func=None, extra=None):
+        rv = LogRecord(name, level, fn, lno, msg, args, exc_info, func)
+        if extra is not None:
+            for key, value in extra.items():
+                if key in ("message", "asctime") or key in rv.__dict__:
+                    raise KeyError(
+                            "Attempt to override %r in LogRecord" % key)
+                rv.__dict__[key] = value
+        rv.processName = multiprocessing.current_process()._name
+        return rv
+
+    def _log(self, level, msg, args, exc_info=None, extra=None):
+        defcaller = "(unknown file)", 0, "(unknown function)"
+        if logging._srcfile:
+            # IronPython doesn't track Python frames, so findCaller
+            # throws an exception on some versions of IronPython.
+            # We trap it here so that IronPython can use logging.
+            try:
+                fn, lno, func = self.logger.findCaller()
+            except ValueError:
+                fn, lno, func = defcaller
+        else:
+            fn, lno, func = defcaller
+        if exc_info:
+            if not isinstance(exc_info, tuple):
+                exc_info = sys.exc_info()
+        record = self.makeRecord(self.logger.name, level, fn, lno, msg,
+                                 args, exc_info, func, extra)
+        self.logger.handle(record)
+
+    def isEnabledFor(self, level):
+        return self.logger.isEnabledFor(level)
+
+    def addHandler(self, hdlr):
+        self.logger.addHandler(hdlr)
+
+    def removeHandler(self, hdlr):
+        self.logger.removeHandler(hdlr)
+
+    @property
+    def level(self):
+        return self.logger.level
+
 
 try:
     from logging import LoggerAdapter
 except ImportError:
-    class LoggerAdapter(object):
+    LoggerAdapter = _CompatLoggerAdapter
 
-        def __init__(self, logger, extra):
-            self.logger = logger
-            self.extra = extra
 
-        def process(self, msg, kwargs):
-            kwargs["extra"] = self.extra
-            return msg, kwargs
-
-        def debug(self, msg, *args, **kwargs):
-            msg, kwargs = self.process(msg, kwargs)
-            self.logger.debug(msg, *args, **kwargs)
-
-        def info(self, msg, *args, **kwargs):
-            msg, kwargs = self.process(msg, kwargs)
-            self.logger.info(msg, *args, **kwargs)
-
-        def warning(self, msg, *args, **kwargs):
-            msg, kwargs = self.process(msg, kwargs)
-            self.logger.warning(msg, *args, **kwargs)
-
-        def warn(self, msg, *args, **kwargs):
-            msg, kwargs = self.process(msg, kwargs)
-            self.logger.warn(msg, *args, **kwargs)
-
-        def error(self, msg, *args, **kwargs):
-            msg, kwargs = self.process(msg, kwargs)
-            self.logger.error(msg, *args, **kwargs)
-
-        def exception(self, msg, *args, **kwargs):
-            msg, kwargs = self.process(msg, kwargs)
-            kwargs["exc_info"] = 1
-            self.logger.error(msg, *args, **kwargs)
-
-        def critical(self, msg, *args, **kwargs):
-            msg, kwargs = self.process(msg, kwargs)
-            self.logger.critical(msg, *args, **kwargs)
-
-        def log(self, level, msg, *args, **kwargs):
-            msg, kwargs = self.process(msg, kwargs)
-            self.logger.log(level, msg, *args, **kwargs)
-
-        def isEnabledFor(self, level, *args, **kwargs):
-            return self.logger.isEnabledFor(level, *args, **kwargs)
+def log_with_extra(logger, level, msg, *args, **kwargs):
+    if not log_takes_extra:
+        kwargs.pop("extra", None)
+    return logger.log(level, msg, *args, **kwargs)
 
 ############## itertools.izip_longest #######################################
 
@@ -346,11 +418,12 @@ try:
     from itertools import izip_longest
 except ImportError:
     import itertools
+
     def izip_longest(*args, **kwds):
         fillvalue = kwds.get("fillvalue")
 
         def sentinel(counter=([fillvalue] * (len(args) - 1)).pop):
-            yield counter() # yields the fillvalue, or raises IndexError
+            yield counter()     # yields the fillvalue, or raises IndexError
 
         fillers = itertools.repeat(fillvalue)
         iters = [itertools.chain(it, sentinel(), fillers)
@@ -360,6 +433,7 @@ except ImportError:
                 yield tup
         except IndexError:
             pass
+
 
 ############## itertools.chain.from_iterable ################################
 from itertools import chain

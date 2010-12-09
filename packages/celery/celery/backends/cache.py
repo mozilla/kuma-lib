@@ -38,11 +38,15 @@ class DummyClient(object):
     def set(self, key, value, *args, **kwargs):
         self.cache[key] = value
 
+    def delete(self, key, *args, **kwargs):
+        self.cache.pop(key, None)
+
 
 backends = {"memcache": get_best_memcache,
             "memcached": get_best_memcache,
             "pylibmc": get_best_memcache,
             "memory": DummyClient}
+
 
 class CacheBackend(KeyValueStoreBackend):
     _client = None
@@ -52,7 +56,7 @@ class CacheBackend(KeyValueStoreBackend):
         super(CacheBackend, self).__init__(self, **kwargs)
         if isinstance(expires, timedelta):
             expires = timeutils.timedelta_seconds(expires)
-        self.expires = expires
+        self.expires = int(expires)
         self.options = dict(conf.CACHE_BACKEND_OPTIONS, **options)
         self.backend, _, servers = partition(backend, "://")
         self.servers = servers.split(";")
@@ -69,6 +73,9 @@ class CacheBackend(KeyValueStoreBackend):
 
     def set(self, key, value):
         return self.client.set(key, value, self.expires)
+
+    def delete(self, key):
+        return self.client.delete(key)
 
     @property
     def client(self):

@@ -20,7 +20,7 @@ def humanize_seconds(secs, prefix=""):
     for unit, divider, formatter in TIME_UNITS:
         if secs >= divider:
             w = secs / divider
-            punit = w > 1 and unit+"s" or unit
+            punit = w > 1 and (unit + "s") or unit
             return "%s%s %s" % (prefix, formatter(w), punit)
     return "now"
 
@@ -38,8 +38,9 @@ def format_queues(queues, indent=0):
     return textindent(info, indent=indent)
 
 
-def get_broker_info():
-    broker_connection = establish_connection()
+def get_broker_info(broker_connection=None):
+    if broker_connection is None:
+        broker_connection = establish_connection()
 
     carrot_backend = broker_connection.backend_cls
     if carrot_backend and not isinstance(carrot_backend, str):

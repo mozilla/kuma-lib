@@ -7,15 +7,24 @@ try:
 except ImportError:
     ctypes = None
 import importlib
+import logging
+
+from datetime import datetime
 from uuid import UUID, uuid4, _uuid_generate_random
 from inspect import getargspec
 from itertools import islice
 
 from carrot.utils import rpartition
+from dateutil.parser import parse as parse_iso8601
 
 from celery.utils.compat import all, any, defaultdict
-from celery.utils.timeutils import timedelta_seconds # was here before
+from celery.utils.timeutils import timedelta_seconds        # was here before
 from celery.utils.functional import curry
+
+
+LOG_LEVELS = dict(logging._levelNames)
+LOG_LEVELS["FATAL"] = logging.FATAL
+LOG_LEVELS[logging.FATAL] = "FATAL"
 
 
 class promise(object):
@@ -98,6 +107,15 @@ def noop(*args, **kwargs):
     pass
 
 
+def maybe_iso8601(dt):
+    """``Either datetime | str -> datetime or None -> None``"""
+    if not dt:
+        return
+    if isinstance(dt, datetime):
+        return dt
+    return parse_iso8601(dt)
+
+
 def kwdict(kwargs):
     """Make sure keyword arguments are not in unicode.
 
@@ -111,7 +129,7 @@ def kwdict(kwargs):
 
 def first(predicate, iterable):
     """Returns the first element in ``iterable`` that ``predicate`` returns a
-    ``True`` value for."""
+    :const:`True` value for."""
     for item in iterable:
         if predicate(item):
             return item
@@ -196,13 +214,13 @@ def is_iterable(obj):
 
 
 def mitemgetter(*items):
-    """Like :func:`operator.itemgetter` but returns ``None`` on missing items
-    instead of raising :exc:`KeyError`."""
+    """Like :func:`operator.itemgetter` but returns :const:`None`
+    on missing items instead of raising :exc:`KeyError`."""
     return lambda container: map(container.get, items)
 
 
 def mattrgetter(*attrs):
-    """Like :func:`operator.itemgetter` but returns ``None`` on missing
+    """Like :func:`operator.itemgetter` but returns :const:`None` on missing
     attributes instead of raising :exc:`AttributeError`."""
     return lambda obj: dict((attr, getattr(obj, attr, None))
                                 for attr in attrs)
@@ -219,7 +237,7 @@ def repeatlast(it):
     yield the last value infinitely."""
     for item in it:
         yield item
-    while 1: # pragma: no cover
+    while 1:                                            # pragma: no cover
         yield item
 
 
@@ -327,7 +345,7 @@ def get_cls_by_name(name, aliases={}):
     """
 
     if not isinstance(name, basestring):
-        return name # already a class
+        return name                                     # already a class
 
     name = aliases.get(name) or name
     module_name, _, cls_name = rpartition(name, ".")
@@ -342,3 +360,28 @@ def instantiate(name, *args, **kwargs):
 
     """
     return get_cls_by_name(name)(*args, **kwargs)
+
+
+def truncate_text(text, maxlen=128, suffix="..."):
+    """Truncates text to a maximum number of characters."""
+    if len(text) >= maxlen:
+        return text[:maxlen].rsplit(" ", 1)[0] + suffix
+    return text
+
+
+def abbr(S, max, ellipsis="..."):
+    if S is None:
+        return "???"
+    if len(S) > max:
+        return ellipsis and (S[:max - len(ellipsis)] + ellipsis) or S[:max]
+    return S
+
+
+def abbrtask(S, max):
+    if S is None:
+        return "???"
+    if len(S) > max:
+        module, _, cls = rpartition(S, ".")
+        module = abbr(module, max - len(cls), False)
+        return module + "[.]" + cls
+    return S

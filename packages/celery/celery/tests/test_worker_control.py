@@ -1,6 +1,8 @@
 import socket
 import unittest2 as unittest
 
+from celery.utils.timer2 import Timer
+
 from celery import conf
 from celery.decorators import task
 from celery.registry import tasks
@@ -10,12 +12,11 @@ from celery.worker import control
 from celery.worker.buckets import FastQueue
 from celery.worker.job import TaskRequest
 from celery.worker.state import revoked
-from celery.worker.scheduler import Scheduler
 
 hostname = socket.gethostname()
 
 
-@task(rate_limit=200) # for extra info in dump_tasks
+@task(rate_limit=200)                   # for extra info in dump_tasks
 def mytask():
     pass
 
@@ -44,7 +45,7 @@ class Listener(object):
                                          task_id=gen_unique_id(),
                                          args=(2, 2),
                                          kwargs={}))
-        self.eta_schedule = Scheduler(self.ready_queue)
+        self.eta_schedule = Timer()
         self.event_dispatcher = Dispatcher()
 
 
@@ -81,7 +82,8 @@ class test_ControlPanel(unittest.TestCase):
         listener = Listener()
         panel = self.create_panel(listener=listener)
         self.assertFalse(panel.execute("dump_schedule"))
-        listener.eta_schedule.enter("foo", eta=100)
+        import operator
+        listener.eta_schedule.schedule.enter(100, operator.add, (2, 2))
         self.assertTrue(panel.execute("dump_schedule"))
 
     def test_dump_reserved(self):

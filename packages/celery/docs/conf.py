@@ -3,16 +3,22 @@
 import sys
 import os
 
+this = os.path.dirname(os.path.abspath(__file__))
+
 # If your extensions are in another directory, add it here. If the directory
 # is relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 sys.path.append(os.path.join(os.pardir, "tests"))
+sys.path.append(os.path.join(this, "_ext"))
 import celery
 
 # General configuration
 # ---------------------
 
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage']
+extensions = ['sphinx.ext.autodoc',
+              'sphinx.ext.coverage',
+              'sphinxcontrib.issuetracker',
+              'celerydocs']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['.templates']
@@ -34,7 +40,7 @@ copyright = u'2009-2010, Ask Solem & contributors'
 # The short X.Y version.
 version = ".".join(map(str, celery.VERSION[0:2]))
 # The full version, including alpha/beta/rc tags.
-release = celery.version_with_meta()
+release = celery.__version__
 
 exclude_trees = ['.build']
 
@@ -66,6 +72,13 @@ html_theme = "celery"
 html_theme_path = ["_theme"]
 html_sidebars = {
     'index': ['sidebarintro.html', 'sourcelink.html', 'searchbox.html'],
-    '**': ['sidebarlogo.html', 'localtoc.html', 'relations.html',
+    '**': ['sidebarlogo.html', 'relations.html',
            'sourcelink.html', 'searchbox.html'],
 }
+
+### Issuetracker
+
+issuetracker = "github"
+issuetracker_user = "ask"
+issuetracker_project = "celery"
+issuetracker_issue_pattern = r'[Ii]ssue #(\d+)'

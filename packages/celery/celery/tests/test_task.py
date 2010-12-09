@@ -8,16 +8,15 @@ from pyparsing import ParseException
 from celery import conf
 from celery import task
 from celery import messaging
-from celery.task.schedules import crontab, crontab_parser
-from celery.utils import timeutils
-from celery.utils import gen_unique_id
-from celery.utils.functional import wraps
-from celery.result import EagerResult
-from celery.execute import send_task
 from celery.backends import default_backend
 from celery.decorators import task as task_dec
 from celery.exceptions import RetryTaskError
-from celery.worker.listener import parse_iso8601
+from celery.execute import send_task
+from celery.result import EagerResult
+from celery.task.schedules import crontab, crontab_parser
+from celery.utils import timeutils
+from celery.utils import gen_unique_id, parse_iso8601
+from celery.utils.functional import wraps
 
 from celery.tests.utils import with_eager_tasks
 
@@ -149,10 +148,14 @@ class TestTaskRetries(unittest.TestCase):
         self.assertEqual(result.get(), 42)
         self.assertEqual(RetryTaskNoArgs.iterations, 4)
 
+    def test_retry_kwargs_can_not_be_empty(self):
+        self.assertRaises(TypeError, RetryTaskMockApply.retry,
+                            args=[4, 4], kwargs={})
+
     def test_retry_not_eager(self):
         exc = Exception("baz")
         try:
-            RetryTaskMockApply.retry(args=[4, 4], kwargs={},
+            RetryTaskMockApply.retry(args=[4, 4], kwargs={"task_retries": 0},
                                      exc=exc, throw=False)
             self.assertTrue(RetryTaskMockApply.applied)
         finally:
@@ -160,7 +163,8 @@ class TestTaskRetries(unittest.TestCase):
 
         try:
             self.assertRaises(RetryTaskError, RetryTaskMockApply.retry,
-                    args=[4, 4], kwargs={}, exc=exc, throw=True)
+                    args=[4, 4], kwargs={"task_retries": 0},
+                    exc=exc, throw=True)
             self.assertTrue(RetryTaskMockApply.applied)
         finally:
             RetryTaskMockApply.applied = 0
@@ -203,6 +207,15 @@ class MockPublisher(object):
 
 
 class TestCeleryTasks(unittest.TestCase):
+
+    def test_unpickle_task(self):
+        import pickle
+
+        @task_dec
+        def xxx():
+            pass
+
+        self.assertIs(pickle.loads(pickle.dumps(xxx)), xxx)
 
     def createTaskCls(self, cls_name, task_name=None):
         attrs = {"__module__": self.__module__}
@@ -337,8 +350,30 @@ class TestCeleryTasks(unittest.TestCase):
             p = IncrementCounterTask.get_publisher(exchange="foo",
                                                    connection="bar")
             self.assertEqual(p.kwargs["exchange"], "foo")
+            p = IncrementCounterTask.get_publisher(exchange_type="fanout",
+                                                   connection="bar")
+            self.assertEqual(p.kwargs["exchange_type"], "fanout")
         finally:
             base.TaskPublisher = old_pub
+
+    def test_update_state(self):
+
+        @task_dec
+        def yyy():
+            pass
+
+        tid = gen_unique_id()
+        yyy.update_state(tid, "FROBULATING", {"fooz": "baaz"})
+        self.assertEqual(yyy.AsyncResult(tid).status, "FROBULATING")
+        self.assertDictEqual(yyy.AsyncResult(tid).result, {"fooz": "baaz"})
+
+    def test_has___name__(self):
+
+        @task_dec
+        def yyy2():
+            pass
+
+        self.assertTrue(yyy2.__name__)
 
     def test_get_logger(self):
         T1 = self.createTaskCls("T1", "c.unittest.t.t1")
@@ -371,7 +406,6 @@ class TestTaskSet(unittest.TestCase):
             IncrementCounterTask.subtask((), {"increment_by": 9}),
         ])
         self.assertEqual(ts.total, 9)
-
 
         consumer = IncrementCounterTask().get_consumer()
         consumer.discard_all()
@@ -567,7 +601,61 @@ class test_crontab_parser(unittest.TestCase):
         self.assertRaises(ParseException, crontab_parser(60).parse, '-20')
 
 
+class test_crontab_remaining_estimate(unittest.TestCase):
+
+    def next_ocurrance(self, crontab, now):
+        crontab.nowfun = lambda: now
+        return now + crontab.remaining_estimate(now)
+
+    def test_next_minute(self):
+        next = self.next_ocurrance(crontab(),
+                                   datetime(2010, 9, 11, 14, 30, 15))
+        self.assertEquals(next, datetime(2010, 9, 11, 14, 31))
+
+    def test_not_next_minute(self):
+        next = self.next_ocurrance(crontab(),
+                                   datetime(2010, 9, 11, 14, 59, 15))
+        self.assertEquals(next, datetime(2010, 9, 11, 15, 0))
+
+    def test_this_hour(self):
+        next = self.next_ocurrance(crontab(minute=[5, 42]),
+                                   datetime(2010, 9, 11, 14, 30, 15))
+        self.assertEquals(next, datetime(2010, 9, 11, 14, 42))
+
+    def test_not_this_hour(self):
+        next = self.next_ocurrance(crontab(minute=[5, 10, 15]),
+                                   datetime(2010, 9, 11, 14, 30, 15))
+        self.assertEquals(next, datetime(2010, 9, 11, 15, 5))
+
+    def test_today(self):
+        next = self.next_ocurrance(crontab(minute=[5, 42], hour=[12, 17]),
+                                   datetime(2010, 9, 11, 14, 30, 15))
+        self.assertEquals(next, datetime(2010, 9, 11, 17, 5))
+
+    def test_not_today(self):
+        next = self.next_ocurrance(crontab(minute=[5, 42], hour=[12]),
+                                   datetime(2010, 9, 11, 14, 30, 15))
+        self.assertEquals(next, datetime(2010, 9, 12, 12, 5))
+
+    def test_weekday(self):
+        next = self.next_ocurrance(crontab(minute=30,
+                                           hour=14,
+                                           day_of_week="sat"),
+                                   datetime(2010, 9, 11, 14, 30, 15))
+        self.assertEquals(next, datetime(2010, 9, 18, 14, 30))
+
+    def test_not_weekday(self):
+        next = self.next_ocurrance(crontab(minute=[5, 42],
+                                           day_of_week="mon-fri"),
+                                   datetime(2010, 9, 11, 14, 30, 15))
+        self.assertEquals(next, datetime(2010, 9, 13, 0, 5))
+
+
 class test_crontab_is_due(unittest.TestCase):
+
+    def setUp(self):
+        self.now = datetime.now()
+        self.next_minute = 60 - self.now.second - 1e-6 * self.now.microsecond
 
     def test_default_crontab_spec(self):
         c = crontab()
@@ -628,101 +716,101 @@ class test_crontab_is_due(unittest.TestCase):
         self.assertRaises(ValueError, crontab, day_of_week='12')
 
     def test_every_minute_execution_is_due(self):
-        last_ran = datetime.now() - timedelta(seconds=61)
+        last_ran = self.now - timedelta(seconds=61)
         due, remaining = EveryMinutePeriodic().is_due(last_ran)
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertAlmostEquals(remaining, self.next_minute, 1)
 
     def test_every_minute_execution_is_not_due(self):
-        last_ran = datetime.now() - timedelta(seconds=30)
+        last_ran = self.now - timedelta(seconds=self.now.second)
         due, remaining = EveryMinutePeriodic().is_due(last_ran)
         self.assertFalse(due)
-        self.assertEquals(remaining, 1)
+        self.assertAlmostEquals(remaining, self.next_minute, 1)
 
     # 29th of May 2010 is a saturday
     @patch_crontab_nowfun(HourlyPeriodic, datetime(2010, 5, 29, 10, 30))
     def test_execution_is_due_on_saturday(self):
-        last_ran = datetime.now() - timedelta(seconds=61)
+        last_ran = self.now - timedelta(seconds=61)
         due, remaining = EveryMinutePeriodic().is_due(last_ran)
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertAlmostEquals(remaining, self.next_minute, 1)
 
     # 30th of May 2010 is a sunday
     @patch_crontab_nowfun(HourlyPeriodic, datetime(2010, 5, 30, 10, 30))
     def test_execution_is_due_on_sunday(self):
-        last_ran = datetime.now() - timedelta(seconds=61)
+        last_ran = self.now - timedelta(seconds=61)
         due, remaining = EveryMinutePeriodic().is_due(last_ran)
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertAlmostEquals(remaining, self.next_minute, 1)
 
     # 31st of May 2010 is a monday
     @patch_crontab_nowfun(HourlyPeriodic, datetime(2010, 5, 31, 10, 30))
     def test_execution_is_due_on_monday(self):
-        last_ran = datetime.now() - timedelta(seconds=61)
+        last_ran = self.now - timedelta(seconds=61)
         due, remaining = EveryMinutePeriodic().is_due(last_ran)
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertAlmostEquals(remaining, self.next_minute, 1)
 
     @patch_crontab_nowfun(HourlyPeriodic, datetime(2010, 5, 10, 10, 30))
     def test_every_hour_execution_is_due(self):
         due, remaining = HourlyPeriodic().is_due(datetime(2010, 5, 10, 6, 30))
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 60 * 60)
 
     @patch_crontab_nowfun(HourlyPeriodic, datetime(2010, 5, 10, 10, 29))
     def test_every_hour_execution_is_not_due(self):
-        due, remaining = HourlyPeriodic().is_due(datetime(2010, 5, 10, 6, 30))
+        due, remaining = HourlyPeriodic().is_due(datetime(2010, 5, 10, 9, 30))
         self.assertFalse(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 60)
 
     @patch_crontab_nowfun(QuarterlyPeriodic, datetime(2010, 5, 10, 10, 15))
     def test_first_quarter_execution_is_due(self):
         due, remaining = QuarterlyPeriodic().is_due(
                             datetime(2010, 5, 10, 6, 30))
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 15 * 60)
 
     @patch_crontab_nowfun(QuarterlyPeriodic, datetime(2010, 5, 10, 10, 30))
     def test_second_quarter_execution_is_due(self):
         due, remaining = QuarterlyPeriodic().is_due(
                             datetime(2010, 5, 10, 6, 30))
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 15 * 60)
 
     @patch_crontab_nowfun(QuarterlyPeriodic, datetime(2010, 5, 10, 10, 14))
     def test_first_quarter_execution_is_not_due(self):
         due, remaining = QuarterlyPeriodic().is_due(
-                            datetime(2010, 5, 10, 6, 30))
+                            datetime(2010, 5, 10, 10, 0))
         self.assertFalse(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 60)
 
     @patch_crontab_nowfun(QuarterlyPeriodic, datetime(2010, 5, 10, 10, 29))
     def test_second_quarter_execution_is_not_due(self):
         due, remaining = QuarterlyPeriodic().is_due(
-                            datetime(2010, 5, 10, 6, 30))
+                            datetime(2010, 5, 10, 10, 15))
         self.assertFalse(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 60)
 
     @patch_crontab_nowfun(DailyPeriodic, datetime(2010, 5, 10, 7, 30))
     def test_daily_execution_is_due(self):
         due, remaining = DailyPeriodic().is_due(datetime(2010, 5, 9, 7, 30))
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 24 * 60 * 60)
 
     @patch_crontab_nowfun(DailyPeriodic, datetime(2010, 5, 10, 10, 30))
     def test_daily_execution_is_not_due(self):
-        due, remaining = DailyPeriodic().is_due(datetime(2010, 5, 10, 6, 29))
+        due, remaining = DailyPeriodic().is_due(datetime(2010, 5, 10, 7, 30))
         self.assertFalse(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 21 * 60 * 60)
 
     @patch_crontab_nowfun(WeeklyPeriodic, datetime(2010, 5, 6, 7, 30))
     def test_weekly_execution_is_due(self):
         due, remaining = WeeklyPeriodic().is_due(datetime(2010, 4, 30, 7, 30))
         self.assertTrue(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 7 * 24 * 60 * 60)
 
     @patch_crontab_nowfun(WeeklyPeriodic, datetime(2010, 5, 7, 10, 30))
     def test_weekly_execution_is_not_due(self):
-        due, remaining = WeeklyPeriodic().is_due(datetime(2010, 4, 30, 6, 29))
+        due, remaining = WeeklyPeriodic().is_due(datetime(2010, 5, 6, 7, 30))
         self.assertFalse(due)
-        self.assertEquals(remaining, 1)
+        self.assertEquals(remaining, 6 * 24 * 60 * 60 - 3 * 60 * 60)

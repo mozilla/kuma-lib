@@ -32,9 +32,9 @@ class BaseBackend(object):
         raise NotImplementedError(
                 "store_result is not supported by this backend.")
 
-    def mark_as_started(self, task_id):
+    def mark_as_started(self, task_id, **meta):
         """Mark a task as started"""
-        return self.store_result(task_id, None, status=states.STARTED)
+        return self.store_result(task_id, meta, status=states.STARTED)
 
     def mark_as_done(self, task_id, result):
         """Mark task as successfully executed."""
@@ -66,6 +66,10 @@ class BaseBackend(object):
     def prepare_value(self, result):
         """Prepare value for storage."""
         return result
+
+    def forget(self, task_id):
+        raise NotImplementedError("%s does not implement forget." % (
+                    self.__class__))
 
     def wait_for(self, task_id, timeout=None):
         """Wait for task and return its result.
@@ -151,6 +155,10 @@ class BaseDictBackend(BaseBackend):
         result = self.encode_result(result, status)
         return self._store_result(task_id, result, status, traceback)
 
+    def forget(self, task_id):
+        self._cache.pop(task_id, None)
+        self._forget(task_id)
+
     def get_status(self, task_id):
         """Get the status of a task."""
         return self.get_task_meta(task_id)["status"]
@@ -211,6 +219,9 @@ class KeyValueStoreBackend(BaseDictBackend):
     def set(self, key, value):
         raise NotImplementedError("Must implement the set method.")
 
+    def delete(self, key):
+        raise NotImplementedError("Must implement the delete method")
+
     def get_key_for_task(self, task_id):
         """Get the cache key for a task by id."""
         return "celery-task-meta-%s" % task_id
@@ -218,6 +229,9 @@ class KeyValueStoreBackend(BaseDictBackend):
     def get_key_for_taskset(self, task_id):
         """Get the cache key for a task by id."""
         return "celery-taskset-meta-%s" % task_id
+
+    def _forget(self, task_id):
+        self.delete(self.get_key_for_task(task_id))
 
     def _store_result(self, task_id, result, status, traceback=None):
         meta = {"status": status, "result": result, "traceback": traceback}

@@ -8,7 +8,7 @@ REVOKES_MAX = 10000
 
 # How many seconds a revoke will be active before
 # being expired when the max limit has been exceeded.
-REVOKE_EXPIRES = 3600 # One hour.
+REVOKE_EXPIRES = 3600  # (one hour)
 
 """
 .. data:: active_requests
@@ -37,13 +37,11 @@ def task_accepted(request):
 
 def task_ready(request):
     """Updates global state when a task is ready."""
-    try:
-        active_requests.remove(request)
-    except KeyError:
-        pass
+    active_requests.discard(request)
 
 
 class Persistent(object):
+    storage = shelve
     _open = None
 
     def __init__(self, filename):
@@ -69,7 +67,7 @@ class Persistent(object):
         return d
 
     def open(self):
-        return shelve.open(self.filename)
+        return self.storage.open(self.filename)
 
     def close(self):
         if self._open:

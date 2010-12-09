@@ -5,82 +5,113 @@ import time
 import os
 import sys
 import traceback
+import types
+
+from multiprocessing import current_process
+from multiprocessing import util as mputil
 
 from celery import conf
-from celery.utils import noop
+from celery import signals
+from celery.utils import noop, LOG_LEVELS
 from celery.utils.compat import LoggerAdapter
 from celery.utils.patch import ensure_process_aware_logger
+from celery.utils.term import colored
 
-_hijacked = False
-_monkeypatched = False
+# The logging subsystem is only configured once per process.
+# setup_logging_subsystem sets this flag, and subsequent calls
+# will do nothing.
+_setup = False
 
-BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
-RESET_SEQ = "\033[0m"
-COLOR_SEQ = "\033[1;%dm"
-BOLD_SEQ = "\033[1m"
-COLORS = {"DEBUG": BLUE,
-          "WARNING": YELLOW,
-          "ERROR": RED,
-          "CRITICAL": MAGENTA}
+COLORS = {"DEBUG": "blue",
+          "WARNING": "yellow",
+          "ERROR": "red",
+          "CRITICAL": "magenta"}
 
 
 class ColorFormatter(logging.Formatter):
+
     def __init__(self, msg, use_color=True):
         logging.Formatter.__init__(self, msg)
         self.use_color = use_color
 
+    def formatException(self, ei):
+        r = logging.Formatter.formatException(self, ei)
+        if type(r) in [types.StringType]:
+            r = r.decode('utf-8', 'replace')    # convert to unicode
+        return r
+
     def format(self, record):
         levelname = record.levelname
+
         if self.use_color and levelname in COLORS:
-            record.msg = COLOR_SEQ % (
-                    30 + COLORS[levelname]) + record.msg + RESET_SEQ
-        return logging.Formatter.format(self, record)
+            record.msg = unicode(colored().names[COLORS[levelname]](
+                            record.msg))
+
+        # Very ugly, but have to make sure processName is supported
+        # by foreign logger instances.
+        # (processName is always supported by Python 2.7)
+        if "processName" not in record.__dict__:
+            record.__dict__["processName"] = current_process()._name
+        t = logging.Formatter.format(self, record)
+        if type(t) in [types.UnicodeType]:
+            t = t.encode('utf-8', 'replace')
+        return t
 
 
 def get_task_logger(loglevel=None, name=None):
-    ensure_process_aware_logger()
     logger = logging.getLogger(name or "celery.task.default")
     if loglevel is not None:
         logger.setLevel(loglevel)
     return logger
 
 
-def _hijack_multiprocessing_logger():
-    from multiprocessing import util as mputil
-    global _hijacked
+def setup_logging_subsystem(loglevel=conf.CELERYD_LOG_LEVEL, logfile=None,
+        format=conf.CELERYD_LOG_FORMAT, colorize=conf.CELERYD_LOG_COLOR,
+        **kwargs):
+    global _setup
+    if not _setup:
+        try:
+            mputil._logger = None
+        except AttributeError:
+            pass
+        ensure_process_aware_logger()
+        logging.Logger.manager.loggerDict.clear()
+        receivers = signals.setup_logging.send(sender=None,
+                                               loglevel=loglevel,
+                                               logfile=logfile,
+                                               format=format,
+                                               colorize=colorize)
+        if not receivers:
+            root = logging.getLogger()
 
-    if _hijacked:
-        return mputil.get_logger()
+            if conf.CELERYD_HIJACK_ROOT_LOGGER:
+                root.handlers = []
 
-    ensure_process_aware_logger()
-
-    logging.Logger.manager.loggerDict.clear()
-
-    try:
-        if mputil._logger is not None:
-            mputil.logger = None
-    except AttributeError:
-        pass
-
-    _hijacked = True
-    return mputil.get_logger()
+            mp = mputil.get_logger()
+            for logger in (root, mp):
+                _setup_logger(logger, logfile, format, colorize, **kwargs)
+                logger.setLevel(loglevel)
+        _setup = True
+        return receivers
 
 
 def _detect_handler(logfile=None):
     """Create log handler with either a filename, an open stream
     or ``None`` (stderr)."""
+    if logfile is None:
+        logfile = sys.__stderr__
     if not logfile or hasattr(logfile, "write"):
         return logging.StreamHandler(logfile)
     return logging.FileHandler(logfile)
 
 
-def get_default_logger(loglevel=None):
+def get_default_logger(loglevel=None, name="celery"):
     """Get default logger instance.
 
     :keyword loglevel: Initial log level.
 
     """
-    logger = _hijack_multiprocessing_logger()
+    logger = logging.getLogger(name)
     if loglevel is not None:
         logger.setLevel(loglevel)
     return logger
@@ -88,20 +119,23 @@ def get_default_logger(loglevel=None):
 
 def setup_logger(loglevel=conf.CELERYD_LOG_LEVEL, logfile=None,
         format=conf.CELERYD_LOG_FORMAT, colorize=conf.CELERYD_LOG_COLOR,
-        **kwargs):
+        name="celery", root=True, **kwargs):
     """Setup the ``multiprocessing`` logger. If ``logfile`` is not specified,
     then ``stderr`` is used.
 
     Returns logger object.
 
     """
-    return _setup_logger(get_default_logger(loglevel),
-                         logfile, format, colorize, **kwargs)
+    if not root or conf.CELERYD_HIJACK_ROOT_LOGGER:
+        return _setup_logger(get_default_logger(loglevel, name),
+                             logfile, format, colorize, **kwargs)
+    setup_logging_subsystem(loglevel, logfile, format, colorize, **kwargs)
+    return get_default_logger(name=name)
 
 
 def setup_task_logger(loglevel=conf.CELERYD_LOG_LEVEL, logfile=None,
         format=conf.CELERYD_TASK_LOG_FORMAT, colorize=conf.CELERYD_LOG_COLOR,
-        task_kwargs=None, **kwargs):
+        task_kwargs=None, propagate=False, **kwargs):
     """Setup the task logger. If ``logfile`` is not specified, then
     ``stderr`` is used.
 
@@ -114,15 +148,17 @@ def setup_task_logger(loglevel=conf.CELERYD_LOG_LEVEL, logfile=None,
     task_name = task_kwargs.get("task_name")
     task_kwargs.setdefault("task_name", "-?-")
     logger = _setup_logger(get_task_logger(loglevel, task_name),
-                           logfile, format, colorize, **kwargs)
+                            logfile, format, colorize, **kwargs)
+    logger.propagate = int(propagate)   # this is an int for some reason.
+                                        # better to just not question why.
     return LoggerAdapter(logger, task_kwargs)
 
 
 def _setup_logger(logger, logfile, format, colorize,
         formatter=ColorFormatter, **kwargs):
-
-    if logger.handlers: # Logger already configured
+    if logger.handlers:                 # already configured
         return logger
+
     handler = _detect_handler(logfile)
     handler.setFormatter(formatter(format, use_color=colorize))
     logger.addHandler(handler)
@@ -178,6 +214,8 @@ class LoggingProxy(object):
     def __init__(self, logger, loglevel=None):
         self.logger = logger
         self.loglevel = loglevel or self.logger.level or self.loglevel
+        if not isinstance(self.loglevel, int):
+            self.loglevel = LOG_LEVELS[self.loglevel.upper()]
         self._safewrap_handlers()
 
     def _safewrap_handlers(self):
@@ -185,7 +223,7 @@ class LoggingProxy(object):
         ``sys.__stderr__`` instead of ``sys.stderr`` to circumvent
         infinite loops."""
 
-        def wrap_handler(handler): # pragma: no cover
+        def wrap_handler(handler):                  # pragma: no cover
 
             class WithSafeHandleError(logging.Handler):
 
@@ -208,7 +246,7 @@ class LoggingProxy(object):
 
     def write(self, data):
         if getattr(self._thread, "recurse_protection", False):
-            # Logger is logging back to this file, so stop recursing.
+            # logger is logging back to this file, so stop recursing.
             return
         """Write message to logging object."""
         data = data.strip()

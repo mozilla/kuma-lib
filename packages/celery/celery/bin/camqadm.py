@@ -39,6 +39,7 @@ Example:
     -> queue.delete myqueue yes no
 """
 
+
 def say(m):
     sys.stderr.write("%s\n" % (m, ))
 
@@ -371,5 +372,5 @@ def main():
     options, values = parse_options(sys.argv[1:])
     return camqadm(*values, **vars(options))
 
-if __name__ == "__main__":
+if __name__ == "__main__":              # pragma: no cover
     main()

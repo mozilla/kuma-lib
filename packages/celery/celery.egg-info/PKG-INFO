@@ -1,8 +1,8 @@
 Metadata-Version: 1.0
 Name: celery
-Version: 2.0.3
+Version: 2.1.4
 Summary: Distributed Task Queue
-Home-page: http://github.com/ask/celery/
+Home-page: http://celeryproject.org
 Author: Ask Solem
 Author-email: ask@celeryproject.org
 License: BSD
@@ -12,7 +12,7 @@ Description: =================================
         
         .. image:: http://cloud.github.com/downloads/ask/celery/celery_favicon_128.png
         
-        :Version: 2.0.3
+        :Version: 2.1.4
         :Web: http://celeryproject.org/
         :Download: http://pypi.python.org/pypi/celery/
         :Source: http://github.com/ask/celery/
@@ -21,34 +21,43 @@ Description: =================================
         
         --
         
+        .. _celery-synopsis:
+        
         Celery is an open source asynchronous task queue/job queue based on
-        distributed message passing. It is focused on real-time operation,
+        distributed message passing.  It is focused on real-time operation,
         but supports scheduling as well.
         
-        The execution units, called tasks, are executed concurrently on a single or
-        more worker servers. Tasks can execute asynchronously (in the background) or synchronously
-        (wait until ready).
+        The execution units, called tasks, are executed concurrently on one or
+        more worker nodes.  Tasks can execute asynchronously (in the background) or
+        synchronously (wait until ready).
         
         Celery is already used in production to process millions of tasks a day.
         
         Celery is written in Python, but the protocol can be implemented in any
-        language. It can also `operate with other languages using webhooks`_.
+        language.  It can also `operate with other languages using webhooks`_.
         
         The recommended message broker is `RabbitMQ`_, but support for `Redis`_ and
         databases (`SQLAlchemy`_) is also available.
         
-        You may also be pleased to know that full Django integration exists,
-        delivered by the `django-celery`_ package.
+        Celery is easy to integrate with `Django`_, `Pylons`_ and `Flask`_, using
+        the `django-celery`_, `celery-pylons`_ and `Flask-Celery`_ add-on packages.
         
         .. _`RabbitMQ`: http://www.rabbitmq.com/
         .. _`Redis`: http://code.google.com/p/redis/
         .. _`SQLAlchemy`: http://www.sqlalchemy.org/
+        .. _`Django`: http://djangoproject.org/
+        .. _`Pylons`: http://pylonshq.com/
+        .. _`Flask`: http://flask.pocoo.org/
         .. _`django-celery`: http://pypi.python.org/pypi/django-celery
+        .. _`celery-pylons`: http://pypi.python.org/pypi/celery-pylons
+        .. _`Flask-Celery`: http://github.com/ask/flask-celery/
         .. _`operate with other languages using webhooks`:
         http://ask.github.com/celery/userguide/remote-tasks.html
         
         .. contents::
         :local:
+        
+        .. _celery-overview:
         
         Overview
         ========
@@ -57,12 +66,14 @@ Description: =================================
         
         .. image:: http://cloud.github.com/downloads/ask/celery/Celery-Overview-v4.jpg
         
-        The broker pushes tasks to the worker servers.
-        A worker server is a networked machine running ``celeryd``. This can be one or
+        The broker delivers tasks to the worker servers.
+        A worker server is a networked machine running ``celeryd``.  This can be one or
         more machines depending on the workload.
         
         The result of the task can be stored for later retrieval (called its
         "tombstone").
+        
+        .. _celery-example:
         
         Example
         =======
@@ -84,6 +95,8 @@ Description: =================================
         8
         
         Simple!
+        
+        .. _celery-features:
         
         Features
         ========
@@ -174,6 +187,8 @@ Description: =================================
         .. _`MongoDB`: http://www.mongodb.org/
         .. _`Tokyo Tyrant`: http://tokyocabinet.sourceforge.net/
         
+        .. _celery-documentation:
+        
         Documentation
         =============
         
@@ -182,8 +197,10 @@ Description: =================================
         
         .. _`latest documentation`: http://ask.github.com/celery/
         
+        .. _celery-installation:
+        
         Installation
-        =============
+        ============
         
         You can install ``celery`` either via the Python Package Index (PyPI)
         or from source.
@@ -195,6 +212,8 @@ Description: =================================
         To install using ``easy_install``,::
         
         $ easy_install celery
+        
+        .. _celery-installing-from-source:
         
         Downloading and installing from source
         --------------------------------------
@@ -209,16 +228,21 @@ Description: =================================
         $ python setup.py build
         # python setup.py install # as root
         
+        .. _celery-installing-from-git:
+        
         Using the development version
-        ------------------------------
+        -----------------------------
         
         You can clone the repository by doing the following::
         
         $ git clone git://github.com/ask/celery.git
         
+        .. _getting-help:
         
         Getting Help
         ============
+        
+        .. _mailing-list:
         
         Mailing list
         ------------
@@ -227,6 +251,8 @@ Description: =================================
         please join the `celery-users`_ mailing list.
         
         .. _`celery-users`: http://groups.google.com/group/celery-users/
+        
+        .. _irc-channel:
         
         IRC
         ---
@@ -237,6 +263,7 @@ Description: =================================
         .. _`#celery`: irc://irc.freenode.net/celery
         .. _`Freenode`: http://freenode.net
         
+        .. _bug-tracker:
         
         Bug tracker
         ===========
@@ -244,10 +271,14 @@ Description: =================================
         If you have any suggestions, bug reports or annoyances please report them
         to our issue tracker at http://github.com/ask/celery/issues/
         
+        .. _wiki:
+        
         Wiki
         ====
         
         http://wiki.github.com/ask/celery/
+        
+        .. _contributing-short:
         
         Contributing
         ============
@@ -257,6 +288,10 @@ Description: =================================
         You are highly encouraged to participate in the development
         of ``celery``. If you don't like Github (for some reason) you're welcome
         to send regular patches.
+        
+        See also the Contributing section in the Documentation.
+        
+        .. _license:
         
         License
         =======

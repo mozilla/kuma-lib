@@ -1,16 +1,16 @@
 Metadata-Version: 1.0
 Name: carrot
-Version: 0.10.5
+Version: 0.10.7
 Summary: AMQP Messaging Framework for Python
 Home-page: http://github.com/ask/carrot/
 Author: Ask Solem
-Author-email: askh@opera.com
+Author-email: ask@celeryproject.org
 License: UNKNOWN
 Description: ##############################################
         carrot - AMQP Messaging Framework for Python
         ##############################################
         
-        :Version: 0.10.5
+        :Version: 0.10.7
         
         **NOTE** This release contains backward-incompatible changes.
         Please read the `Changelog`_ for more information.
@@ -192,7 +192,7 @@ Description: ##############################################
         >>> from carrot.messaging import Consumer
         >>> consumer = Consumer(connection=conn, queue="feed",
         ...                     exchange="feed", routing_key="importer")
-        >>> def import_feed_callback(message_data, message)
+        >>> def import_feed_callback(message_data, message):
         ...     feed_url = message_data["import_feed"]
         ...     print("Got feed import message for: %s" % feed_url)
         ...     # something importing this feed url

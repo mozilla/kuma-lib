@@ -10,7 +10,12 @@ from celery.backends import default_backend
 from celery.datastructures import PositionQueue
 from celery.exceptions import TimeoutError
 from celery.messaging import with_connection
+from celery.registry import _unpickle_task
 from celery.utils import any, all
+
+
+def _unpickle_result(task_id, task_name):
+    return _unpickle_task(task_name).AsyncResult(task_id)
 
 
 class BaseAsyncResult(object):
@@ -31,9 +36,20 @@ class BaseAsyncResult(object):
 
     TimeoutError = TimeoutError
 
-    def __init__(self, task_id, backend):
+    def __init__(self, task_id, backend, task_name=None):
         self.task_id = task_id
         self.backend = backend
+        self.task_name = task_name
+
+    def __reduce__(self):
+        if self.task_name:
+            return (_unpickle_result, (self.task_id, self.task_name))
+        else:
+            return (self.__class__, (self.task_id, self.backend))
+
+    def forget(self):
+        """Forget about (and possibly remove the result of) this task."""
+        self.backend.forget(self.task_id)
 
     def revoke(self, connection=None, connect_timeout=None):
         """Send revoke signal to all workers.
@@ -51,8 +67,9 @@ class BaseAsyncResult(object):
         :keyword timeout: How long to wait, in seconds, before the
             operation times out.
 
-        :raises celery.exceptions.TimeoutError: if ``timeout`` is not ``None``
-            and the result does not arrive within ``timeout`` seconds.
+        :raises celery.exceptions.TimeoutError: if ``timeout`` is not
+            :const:`None` and the result does not arrive within ``timeout``
+            seconds.
 
         If the remote call raised an exception then that
         exception will be re-raised.
@@ -65,21 +82,21 @@ class BaseAsyncResult(object):
         return self.wait(timeout=timeout)
 
     def ready(self):
-        """Returns ``True`` if the task executed successfully, or raised
+        """Returns :const:`True` if the task executed successfully, or raised
         an exception.
 
         If the task is still running, pending, or is waiting
-        for retry then ``False`` is returned.
+        for retry then :const:`False` is returned.
 
         """
-        return self.status not in self.backend.UNREADY_STATES
+        return self.status in self.backend.READY_STATES
 
     def successful(self):
-        """Returns ``True`` if the task executed successfully."""
+        """Returns :const:`True` if the task executed successfully."""
         return self.status == states.SUCCESS
 
     def failed(self):
-        """Returns ``True`` if the task failed by exception."""
+        """Returns :const:`True` if the task failed by exception."""
         return self.status == states.FAILURE
 
     def __str__(self):
@@ -111,12 +128,26 @@ class BaseAsyncResult(object):
         return self.backend.get_result(self.task_id)
 
     @property
+    def info(self):
+        """Get state metadata.
+
+        Alias to :meth:`result`.
+
+        """
+        return self.result
+
+    @property
     def traceback(self):
         """Get the traceback of a failed task."""
         return self.backend.get_traceback(self.task_id)
 
     @property
     def status(self):
+        """Deprecated alias of :attr:`state`."""
+        return self.state
+
+    @property
+    def state(self):
         """The current status of the task.
 
         Can be one of the following:
@@ -164,8 +195,9 @@ class AsyncResult(BaseAsyncResult):
 
     """
 
-    def __init__(self, task_id, backend=None):
-        super(AsyncResult, self).__init__(task_id, backend or default_backend)
+    def __init__(self, task_id, backend=None, task_name=None):
+        super(AsyncResult, self).__init__(task_id, backend or default_backend,
+                                          task_name=task_name)
 
 
 class TaskSetResult(object):
@@ -204,7 +236,7 @@ class TaskSetResult(object):
     def successful(self):
         """Was the taskset successful?
 
-        :returns: ``True`` if all of the tasks in the taskset finished
+        :returns: :const:`True` if all of the tasks in the taskset finished
             successfully (i.e. did not raise an exception).
 
         """
@@ -214,7 +246,7 @@ class TaskSetResult(object):
     def failed(self):
         """Did the taskset fail?
 
-        :returns: ``True`` if any of the tasks in the taskset failed.
+        :returns: :const:`True` if any of the tasks in the taskset failed.
             (i.e., raised an exception)
 
         """
@@ -224,7 +256,7 @@ class TaskSetResult(object):
     def waiting(self):
         """Is the taskset waiting?
 
-        :returns: ``True`` if any of the tasks in the taskset is still
+        :returns: :const:`True` if any of the tasks in the taskset is still
             waiting for execution.
 
         """
@@ -234,7 +266,7 @@ class TaskSetResult(object):
     def ready(self):
         """Is the task ready?
 
-        :returns: ``True`` if all of the tasks in the taskset has been
+        :returns: :const:`True` if all of the tasks in the taskset has been
             executed.
 
         """
@@ -250,6 +282,12 @@ class TaskSetResult(object):
         return sum(imap(int, (subtask.successful()
                                 for subtask in self.itersubtasks())))
 
+    def forget(self):
+        """Forget about (and possible remove the result of) all the tasks
+        in this taskset."""
+        for subtask in self.subtasks:
+            subtask.forget()
+
     @with_connection
     def revoke(self, connection=None, connect_timeout=None):
         for subtask in self.subtasks:
@@ -258,6 +296,9 @@ class TaskSetResult(object):
     def __iter__(self):
         """``iter(res)`` -> ``res.iterate()``."""
         return self.iterate()
+
+    def __getitem__(self, index):
+        return self.subtasks[index]
 
     def iterate(self):
         """Iterate over the return values of the tasks as they finish
@@ -281,21 +322,21 @@ class TaskSetResult(object):
                 elif result.status in states.PROPAGATE_STATES:
                     raise result.result
 
-    def join(self, timeout=None):
-        """Gather the results for all of the tasks in the taskset,
-        and return a list with them ordered by the order of which they
-        were called.
+    def join(self, timeout=None, propagate=True):
+        """Gather the results of all tasks in the taskset,
+        and returns a list ordered by the order of the set.
 
-        :keyword timeout: The time in seconds, how long
-            it will wait for results, before the operation times out.
+        :keyword timeout: The number of seconds to wait for results
+            before the operation times out.
 
-        :raises celery.exceptions.TimeoutError: if ``timeout`` is not ``None``
-            and the operation takes longer than ``timeout`` seconds.
+        :keyword propagate: If any of the subtasks raises an exception, the
+            exception will be reraised.
 
-        If any of the tasks raises an exception, the exception
-        will be reraised by :meth:`join`.
+        :raises celery.exceptions.TimeoutError: if ``timeout`` is not
+            :const:`None` and the operation takes longer than ``timeout``
+            seconds.
 
-        :returns: list of return values for all tasks in the taskset.
+        :returns: list of return values for all subtasks in order.
 
         """
 
@@ -308,17 +349,18 @@ class TaskSetResult(object):
 
         while True:
             for position, pending_result in enumerate(self.subtasks):
-                if pending_result.status == states.SUCCESS:
+                state = pending_result.state
+                if state in states.READY_STATES:
+                    if propagate and state in states.PROPAGATE_STATES:
+                        raise pending_result.result
                     results[position] = pending_result.result
-                elif pending_result.status in states.PROPAGATE_STATES:
-                    raise pending_result.result
             if results.full():
                 # Make list copy, so the returned type is not a position
                 # queue.
                 return list(results)
             else:
-                if timeout is not None and \
-                        time.time() >= time_start + timeout:
+                if (timeout is not None and
+                        time.time() >= time_start + timeout):
                     on_timeout()
 
     def save(self, backend=default_backend):
@@ -354,11 +396,11 @@ class EagerResult(BaseAsyncResult):
         self._traceback = traceback
 
     def successful(self):
-        """Returns ``True`` if the task executed without failure."""
+        """Returns :const:`True` if the task executed without failure."""
         return self.status == states.SUCCESS
 
     def ready(self):
-        """Returns ``True`` if the task has been executed."""
+        """Returns :const:`True` if the task has been executed."""
         return True
 
     def wait(self, timeout=None):
@@ -378,8 +420,13 @@ class EagerResult(BaseAsyncResult):
 
     @property
     def status(self):
-        """The tasks status"""
+        """The tasks status (alias to :attr:`state`)."""
         return self._status
+
+    @property
+    def state(self):
+        """The tasks state."""
+        return self._state
 
     @property
     def traceback(self):

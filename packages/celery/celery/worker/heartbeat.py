@@ -23,6 +23,7 @@ class Heart(threading.Thread):
         self._shutdown = threading.Event()
         self._stopped = threading.Event()
         self.setDaemon(True)
+        self.setName(self.__class__.__name__)
         self._state = None
 
     def run(self):
@@ -38,7 +39,13 @@ class Heart(threading.Thread):
 
         last_beat = None
         while 1:
-            now = time()
+            try:
+                now = time()
+            except TypeError:
+                # we lost the race at interpreter shutdown,
+                # so time has been collected by gc.
+                return
+
             if not last_beat or now > last_beat + (60.0 / bpm):
                 last_beat = now
                 dispatch("worker-heartbeat")
@@ -57,6 +64,6 @@ class Heart(threading.Thread):
             return
         self._state = "CLOSE"
         self._shutdown.set()
-        self._stopped.wait() # block until this thread is done
+        self._stopped.wait()            # block until this thread is done
         if self.isAlive():
             self.join(1e100)

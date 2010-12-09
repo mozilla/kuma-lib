@@ -13,7 +13,6 @@
     celery.worker.job
     celery.worker.controllers
     celery.worker.buckets
-    celery.worker.scheduler
     celery.worker.heartbeat
     celery.worker.control
     celery.worker.control.builtins
@@ -37,16 +36,21 @@
     celery.datastructures
     celery.routes
     celery.log
+    celery.events.snapshot
+    celery.events.cursesmon
+    celery.events.dumper
     celery.db.models
     celery.db.session
     celery.utils
+    celery.utils.term
     celery.utils.timeutils
     celery.utils.info
     celery.utils.compat
     celery.utils.mail
     celery.utils.patch
     celery.utils.functional
+    celery.utils.timer2
     celery.utils.dispatch
     celery.utils.dispatch.signal
     celery.utils.dispatch.saferef
-    celery.platform
+    celery.platforms

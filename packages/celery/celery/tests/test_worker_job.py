@@ -42,7 +42,7 @@ def mytask(i, **kwargs):
     return i ** i
 
 
-@task_dec # traverses coverage for decorator without parens
+@task_dec               # traverses coverage for decorator without parens
 def mytask_no_kwargs(i):
     return i ** i
 
@@ -125,35 +125,35 @@ class test_TaskRequest(unittest.TestCase):
         self.assertIn("task-frobulated", tw.eventer.sent)
 
     def test_send_email(self):
-        from celery import conf
-        from celery.worker import job
-        old_mail_admins = job.mail_admins
-        old_enable_mails = conf.CELERY_SEND_TASK_ERROR_EMAILS
+        from celery.loaders import current_loader
+        loader = current_loader()
+        old_mail_admins = loader.mail_admins
+        old_enable_mails = mytask.send_error_emails
         mail_sent = [False]
 
         def mock_mail_admins(*args, **kwargs):
             mail_sent[0] = True
 
-        job.mail_admins = mock_mail_admins
-        conf.CELERY_SEND_TASK_ERROR_EMAILS = True
+        loader.mail_admins = mock_mail_admins
+        mytask.send_error_emails = True
         try:
             tw = TaskRequest(mytask.name, gen_unique_id(), [1], {"f": "x"})
             try:
-                raise KeyError("foo")
-            except KeyError:
+                raise KeyError("moofoobar")
+            except:
                 einfo = ExceptionInfo(sys.exc_info())
 
             tw.on_failure(einfo)
             self.assertTrue(mail_sent[0])
 
             mail_sent[0] = False
-            conf.CELERY_SEND_TASK_ERROR_EMAILS = False
+            mytask.send_error_emails = False
             tw.on_failure(einfo)
             self.assertFalse(mail_sent[0])
 
         finally:
-            job.mail_admins = old_mail_admins
-            conf.CELERY_SEND_TASK_ERROR_EMAILS = old_enable_mails
+            loader.mail_admins = old_mail_admins
+            mytask.send_error_emails = old_enable_mails
 
     def test_already_revoked(self):
         tw = TaskRequest(mytask.name, gen_unique_id(), [1], {"f": "x"})
@@ -323,7 +323,8 @@ class test_TaskRequest(unittest.TestCase):
         tw = TaskRequest(mytask.name, gen_unique_id(), [], {})
         x = tw.success_msg % {"name": tw.task_name,
                               "id": tw.task_id,
-                              "return_value": 10}
+                              "return_value": 10,
+                              "runtime": 0.3641}
         self.assertTrue(x)
         x = tw.error_msg % {"name": tw.task_name,
                            "id": tw.task_id,
@@ -455,7 +456,8 @@ class test_TaskRequest(unittest.TestCase):
 
         logfh = StringIO()
         tw.logger.handlers = []
-        tw.logger = setup_logger(logfile=logfh, loglevel=logging.INFO)
+        tw.logger = setup_logger(logfile=logfh, loglevel=logging.INFO,
+                                 root=False)
 
         from celery import conf
         conf.CELERY_SEND_TASK_ERROR_EMAILS = True

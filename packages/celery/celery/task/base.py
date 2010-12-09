@@ -1,23 +1,32 @@
 import sys
-from datetime import timedelta
+import warnings
 
 from celery import conf
-from celery.log import setup_task_logger
-from celery.utils.timeutils import timedelta_seconds
-from celery.result import BaseAsyncResult, EagerResult
-from celery.execute import apply_async, apply
-from celery.registry import tasks
 from celery.backends import default_backend
+from celery.exceptions import MaxRetriesExceededError, RetryTaskError
+from celery.execute import apply_async, apply
+from celery.log import setup_task_logger
 from celery.messaging import TaskPublisher, TaskConsumer
 from celery.messaging import establish_connection as _establish_connection
-from celery.exceptions import MaxRetriesExceededError, RetryTaskError
+from celery.registry import tasks, _unpickle_task
+from celery.result import BaseAsyncResult, EagerResult
+from celery.schedules import maybe_schedule
+from celery.utils.timeutils import timedelta_seconds
 
-from celery.task.schedules import schedule
 from celery.task.sets import TaskSet, subtask
 
+PERIODIC_DEPRECATION_TEXT = """\
+Periodic task classes has been deprecated and will be removed
+in celery v3.0.
 
-def _unpickle_task(name):
-    return tasks[name]
+Please use the CELERYBEAT_SCHEDULE setting instead:
+
+    CELERYBEAT_SCHEDULE = {
+        name: dict(task=task_name, schedule=run_every,
+                   args=(), kwargs={}, options={}, relative=False)
+    }
+
+"""
 
 
 class TaskType(type):
@@ -76,7 +85,7 @@ class Task(object):
 
     .. attribute:: abstract
 
-        If ``True`` the task is an abstract base class.
+        If :const:`True` the task is an abstract base class.
 
     .. attribute:: type
 
@@ -87,7 +96,7 @@ class Task(object):
     .. attribute:: queue
 
         Select a destination queue for this task. The queue needs to exist
-        in ``CELERY_QUEUES``. The ``routing_key``, ``exchange`` and
+        in :setting:`CELERY_QUEUES`. The ``routing_key``, ``exchange`` and
         ``exchange_type`` attributes will be ignored if this is set.
 
     .. attribute:: routing_key
@@ -127,7 +136,7 @@ class Task(object):
     .. attribute:: max_retries
 
         Maximum number of retries before giving up.
-        If set to ``None``, it will never stop retrying.
+        If set to :const:`None`, it will never stop retrying.
 
     .. attribute:: default_retry_delay
 
@@ -136,18 +145,27 @@ class Task(object):
 
     .. attribute:: rate_limit
 
-        Set the rate limit for this task type, Examples: ``None`` (no rate
-        limit), ``"100/s"`` (hundred tasks a second), ``"100/m"`` (hundred
-        tasks a minute), ``"100/h"`` (hundred tasks an hour)
+        Set the rate limit for this task type, Examples: :const:`None` (no
+        rate limit), ``"100/s"`` (hundred tasks a second), ``"100/m"``
+        (hundred tasks a minute), ``"100/h"`` (hundred tasks an hour)
 
     .. attribute:: ignore_result
 
         Don't store the return value of this task.
 
-    .. attribute:: disable_error_emails
+    .. attribute:: store_errors_even_if_ignored
 
-        Disable all error e-mails for this task (only applicable if
-        ``settings.CELERY_SEND_TASK_ERROR_EMAILS`` is on.)
+        If true, errors will be stored even if the task is configured
+        to ignore results.
+
+    .. attribute:: send_error_emails
+
+        If true, an e-mail will be sent to the admins whenever
+        a task of this type raises an exception.
+
+    .. attribute:: error_whitelist
+
+        List of exception types to send error e-mails for.
 
     .. attribute:: serializer
 
@@ -160,12 +178,12 @@ class Task(object):
 
     .. attribute:: autoregister
 
-        If ``True`` the task is automatically registered in the task
+        If :const:`True` the task is automatically registered in the task
         registry, which is the default behaviour.
 
     .. attribute:: track_started
 
-        If ``True`` the task will report its status as "started"
+        If :const:`True` the task will report its status as "started"
         when the task is executed by a worker.
         The default value is ``False`` as the normal behaviour is to not
         report that level of granularity. Tasks are either pending, finished,
@@ -173,12 +191,12 @@ class Task(object):
         when there are long running tasks and there is a need to report which
         task is currently running.
 
-        The global default can be overridden by the ``CELERY_TRACK_STARTED``
-        setting.
+        The global default can be overridden by the
+        :setting:`CELERY_TRACK_STARTED` setting.
 
     .. attribute:: acks_late
 
-        If set to ``True`` messages for this task will be acknowledged
+        If set to :const:`True` messages for this task will be acknowledged
         **after** the task has been executed, not *just before*, which is
         the default behavior.
 
@@ -186,8 +204,12 @@ class Task(object):
         crashes in the middle of execution, which may be acceptable for some
         applications.
 
-        The global default can be overriden by the ``CELERY_ACKS_LATE``
+        The global default can be overriden by the :setting:`CELERY_ACKS_LATE`
         setting.
+
+    .. attribute:: expires
+
+        Default task expiry time in seconds or a :class:`~datetime.datetime`.
 
     """
     __metaclass__ = TaskType
@@ -207,9 +229,13 @@ class Task(object):
     priority = None
 
     ignore_result = conf.IGNORE_RESULT
-    disable_error_emails = False
-    max_retries = 3
+    store_errors_even_if_ignored = conf.STORE_ERRORS_EVEN_IF_IGNORED
+    send_error_emails = conf.CELERY_SEND_TASK_ERROR_EMAILS
+    error_whitelist = conf.CELERY_TASK_ERROR_WHITELIST
+    disable_error_emails = False                                    # FIXME
+    max_retries = 5
     default_retry_delay = 3 * 60
+    expires = None
     serializer = conf.TASK_SERIALIZER
     rate_limit = conf.DEFAULT_RATE_LIMIT
     backend = default_backend
@@ -247,14 +273,15 @@ class Task(object):
         raise NotImplementedError("Tasks must define the run method.")
 
     @classmethod
-    def get_logger(self, loglevel=None, logfile=None, **kwargs):
+    def get_logger(self, loglevel=None, logfile=None, propagate=False,
+            **kwargs):
         """Get task-aware logger object.
 
         See :func:`celery.log.setup_task_logger`.
 
         """
         return setup_task_logger(loglevel=loglevel, logfile=logfile,
-                                 task_kwargs=kwargs)
+                                 propagate=propagate, task_kwargs=kwargs)
 
     @classmethod
     def establish_connection(self,
@@ -376,6 +403,11 @@ class Task(object):
             ...                        countdown=60 * 5, exc=exc)
 
         """
+        if not kwargs:
+            raise TypeError(
+                    "kwargs argument to retries can't be empty. "
+                    "Task must accept **kwargs, see http://bit.ly/cAx3Bg")
+
         delivery_info = kwargs.pop("delivery_info", {})
         options.setdefault("exchange", delivery_info.get("exchange"))
         options.setdefault("routing_key", delivery_info.get("routing_key"))
@@ -396,7 +428,7 @@ class Task(object):
         if kwargs.get("task_is_eager", False):
             result = self.apply(args=args, kwargs=kwargs, **options)
             if isinstance(result, EagerResult):
-                return result.get() # propogates exceptions.
+                return result.get()                 # propogates exceptions.
             return result
 
         self.apply_async(args=args, kwargs=kwargs, **options)
@@ -413,7 +445,7 @@ class Task(object):
         :param args: positional arguments passed on to the task.
         :param kwargs: keyword arguments passed on to the task.
         :keyword throw: Re-raise task exceptions. Defaults to
-            the ``CELERY_EAGER_PROPAGATES_EXCEPTIONS`` setting.
+            the :setting:`CELERY_EAGER_PROPAGATES_EXCEPTIONS` setting.
 
         :rtype :class:`celery.result.EagerResult`:
 
@@ -429,7 +461,18 @@ class Task(object):
         :param task_id: Task id to get result for.
 
         """
-        return BaseAsyncResult(task_id, backend=self.backend)
+        return BaseAsyncResult(task_id, backend=self.backend,
+                                        task_name=self.name)
+
+    def update_state(self, task_id, state, meta=None):
+        """Update task state.
+
+        :param task_id: Id of the task to update.
+        :param state: New state (:class:`str`).
+        :param meta: State metadata (:class:`dict`).
+
+        """
+        self.backend.store_result(task_id, meta, state)
 
     def on_retry(self, exc, task_id, args, kwargs, einfo=None):
         """Retry handler.
@@ -514,7 +557,7 @@ class Task(object):
         """repr(task)"""
         try:
             kind = self.__class__.mro()[1].__name__
-        except (AttributeError, IndexError):
+        except (AttributeError, IndexError):            # pragma: no cover
             kind = "%s(Task)" % self.__class__.__name__
         return "<%s: %s (%s)>" % (kind, self.name, self.type)
 
@@ -524,6 +567,10 @@ class Task(object):
         this task that wraps arguments and execution options
         for a single task invocation."""
         return subtask(cls, *args, **kwargs)
+
+    @property
+    def __name__(self):
+        return self.__class__.__name__
 
 
 class PeriodicTask(Task):
@@ -540,7 +587,7 @@ class PeriodicTask(Task):
 
     .. attribute:: relative
 
-        If set to ``True``, run times are relative to the time when the
+        If set to :const:`True`, run times are relative to the time when the
         server was started. This was the previous behaviour, periodic tasks
         are now scheduled by the clock.
 
@@ -592,17 +639,21 @@ class PeriodicTask(Task):
         if not hasattr(self, "run_every"):
             raise NotImplementedError(
                     "Periodic tasks must have a run_every attribute")
+        self.run_every = maybe_schedule(self.run_every, self.relative)
 
-        # If run_every is a integer, convert it to timedelta seconds.
-        # Operate on the original class attribute so anyone accessing
-        # it directly gets the right value.
-        if isinstance(self.__class__.run_every, int):
-            self.__class__.run_every = timedelta(seconds=self.run_every)
+        # Periodic task classes is pending deprecation.
+        warnings.warn(PendingDeprecationWarning(PERIODIC_DEPRECATION_TEXT))
 
-        # Convert timedelta to instance of schedule.
-        if isinstance(self.__class__.run_every, timedelta):
-            self.__class__.run_every = schedule(self.__class__.run_every,
-                                                self.relative)
+        # For backward compatibility, add the periodic task to the
+        # configuration schedule instead.
+        conf.CELERYBEAT_SCHEDULE[self.name] = {
+                "task": self.name,
+                "schedule": self.run_every,
+                "args": (),
+                "kwargs": {},
+                "options": {},
+                "relative": self.relative,
+        }
 
         super(PeriodicTask, self).__init__()
 
@@ -618,21 +669,7 @@ class PeriodicTask(Task):
         """Returns tuple of two items ``(is_due, next_time_to_run)``,
         where next time to run is in seconds.
 
-        e.g.
-
-        * ``(True, 20)``, means the task should be run now, and the next
-            time to run is in 20 seconds.
-
-        * ``(False, 12)``, means the task should be run in 12 seconds.
-
-        You can override this to decide the interval at runtime,
-        but keep in mind the value of ``CELERYBEAT_MAX_LOOP_INTERVAL``, which
-        decides the maximum number of seconds celerybeat can sleep between
-        re-checking the periodic task intervals. So if you dynamically change
-        the next run at value, and the max interval is set to 5 minutes, it
-        will take 5 minutes for the change to take effect, so you may
-        consider lowering the value of ``CELERYBEAT_MAX_LOOP_INTERVAL`` if
-        responsiveness if of importance to you.
+        See :meth:`celery.schedules.schedule.is_due` for more information.
 
         """
         return self.run_every.is_due(last_run_at)

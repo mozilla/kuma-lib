@@ -46,7 +46,7 @@ up and running.
   again, and again.
 
 * If the task has an ETA/countdown, the task is moved to the ``eta_schedule``
-  so the :class:`~celery.worker.scheduler.Scheduler` can schedule it at its
+  so the :class:`timer2.Timer` can schedule it at its
   deadline. Tasks without an eta are moved immediately to the ``ready_queue``,
   so they can be picked up by the :class:`~celery.worker.controllers.Mediator`
   to be sent to the pool.
@@ -76,11 +76,10 @@ up and running.
 from __future__ import generators
 
 import socket
+import sys
+import traceback
 import warnings
 
-from datetime import datetime
-
-from dateutil.parser import parse as parse_iso8601
 from carrot.connection import AMQPConnectionException
 
 from celery import conf
@@ -93,6 +92,8 @@ from celery.messaging import establish_connection
 from celery.messaging import get_consumer_set, BroadcastConsumer
 from celery.exceptions import NotRegistered
 from celery.datastructures import SharedCounter
+from celery.utils.info import get_broker_info
+from celery.utils.timer2 import to_timestamp
 
 RUN = 0x1
 CLOSE = 0x2
@@ -117,11 +118,13 @@ class QoS(object):
 
     def increment(self):
         """Increment the current prefetch count value by one."""
-        return self.set(self.value.increment())
+        if int(self.value) > 0:
+            return self.set(self.value.increment())
 
     def decrement(self):
         """Decrement the current prefetch count value by one."""
-        return self.set(self.value.decrement())
+        if int(self.value) > 1:
+            return self.set(self.value.decrement())
 
     def decrement_eventually(self):
         """Decrement the value, but do not update the qos.
@@ -206,6 +209,7 @@ class CarrotListener(object):
             initial_prefetch_count=2, pool=None):
         self.connection = None
         self.task_consumer = None
+        self.broadcast_consumer = None
         self.ready_queue = ready_queue
         self.eta_schedule = eta_schedule
         self.send_events = send_events
@@ -234,7 +238,7 @@ class CarrotListener(object):
             self.reset_connection()
             try:
                 self.consume_messages()
-            except (socket.error, AMQPConnectionException, IOError):
+            except (socket.error, AMQPConnectionException, IOError, OSError):
                 self.logger.error("CarrotListener: Connection to broker lost."
                                 + " Trying to re-establish connection...")
 
@@ -249,7 +253,7 @@ class CarrotListener(object):
                 self.qos.update()
             wait_for_message()
 
-    def on_task(self, task, eta=None):
+    def on_task(self, task):
         """Handle received task.
 
         If the task has an ``eta`` we enter it into the ETA schedule,
@@ -260,47 +264,71 @@ class CarrotListener(object):
         if task.revoked():
             return
 
+        self.logger.info("Got task from broker: %s" % (task.shortinfo(), ))
+
         self.event_dispatcher.send("task-received", uuid=task.task_id,
                 name=task.task_name, args=repr(task.args),
-                kwargs=repr(task.kwargs), retries=task.retries, eta=eta)
+                kwargs=repr(task.kwargs), retries=task.retries,
+                eta=task.eta and task.eta.isoformat(),
+                expires=task.expires and task.expires.isoformat())
 
-        if eta:
-            if not isinstance(eta, datetime):
-                eta = parse_iso8601(eta)
-            self.qos.increment()
-            self.logger.info("Got task from broker: %s[%s] eta:[%s]" % (
-                    task.task_name, task.task_id, eta))
-            self.eta_schedule.enter(task, eta=eta,
-                    callback=self.qos.decrement_eventually)
+        if task.eta:
+            try:
+                eta = to_timestamp(task.eta)
+            except OverflowError, exc:
+                self.logger.error(
+                    "Couldn't convert eta %s to timestamp: %r. Task: %r" % (
+                        task.eta, exc, task.info(safe=True)),
+                        exc_info=sys.exc_info())
+                task.acknowledge()
+            else:
+                self.qos.increment()
+                self.eta_schedule.apply_at(eta,
+                                           self.apply_eta_task, (task, ))
         else:
-            self.logger.info("Got task from broker: %s[%s]" % (
-                    task.task_name, task.task_id))
             self.ready_queue.put(task)
+
+    def apply_eta_task(self, task):
+        self.ready_queue.put(task)
+        self.qos.decrement_eventually()
 
     def on_control(self, control):
         """Handle received remote control command."""
-        return self.control_dispatch.dispatch_from_message(control)
+        try:
+            self.control_dispatch.dispatch_from_message(control)
+        except Exception, exc:
+            self.logger.error(
+                "Error occurred while handling control command: %r\n%s" % (
+                    exc, traceback.format_exc()))
 
     def receive_message(self, message_data, message):
         """The callback called when a new message is received. """
 
         # Handle task
         if message_data.get("task"):
+            def ack():
+                try:
+                    message.ack()
+                except (socket.error, AMQPConnectionException,
+                        IOError, OSError), exc:
+                    self.logger.critical(
+                            "Couldn't ack %r: message:%r reason:%r" % (
+                                message.delivery_tag, message_data, exc))
             try:
-                task = TaskRequest.from_message(message, message_data,
+                task = TaskRequest.from_message(message, message_data, ack,
                                                 logger=self.logger,
                                                 hostname=self.hostname,
                                                 eventer=self.event_dispatcher)
             except NotRegistered, exc:
                 self.logger.error("Unknown task ignored: %s: %s" % (
-                        str(exc), message_data))
+                        str(exc), message_data), exc_info=sys.exc_info())
                 message.ack()
             except InvalidTaskError, exc:
                 self.logger.error("Invalid task ignored: %s: %s" % (
-                        str(exc), message_data))
+                        str(exc), message_data), exc_info=sys.exc_info())
                 message.ack()
             else:
-                self.on_task(task, eta=message_data.get("eta"))
+                self.on_task(task)
             return
 
         # Handle control command
@@ -316,7 +344,7 @@ class CarrotListener(object):
     def maybe_conn_error(self, fun):
         try:
             fun()
-        except Exception: # TODO kombu.connection_errors
+        except Exception:                   # TODO kombu.connection_errors
             pass
 
     def close_connection(self):
@@ -327,6 +355,12 @@ class CarrotListener(object):
                     self.maybe_conn_error(self.task_consumer.close)
         self.logger.debug("CarrotListener: "
                           "Closing connection to broker...")
+
+        self.logger.debug("CarrotListener: Closing broadcast channel...")
+        if self.broadcast_consumer:
+            self.broadcast_consumer = \
+                    self.maybe_conn_error(self.broadcast_consumer.close)
+
         if self.connection:
             self.connection = self.maybe_conn_error(self.connection.close)
 
@@ -348,6 +382,10 @@ class CarrotListener(object):
             self.logger.debug("EventDispatcher: Shutting down...")
             self.event_dispatcher = \
                     self.maybe_conn_error(self.event_dispatcher.close)
+
+        self.logger.debug("BroadcastConsumer: Cancelling consumer...")
+        if self.broadcast_consumer:
+            self.maybe_conn_error(self.broadcast_consumer.cancel)
 
         if close:
             self.close_connection()
@@ -378,12 +416,12 @@ class CarrotListener(object):
         self.connection = self._open_connection()
         self.logger.debug("CarrotListener: Connection Established.")
         self.task_consumer = get_consumer_set(connection=self.connection)
+        self.task_consumer.on_decode_error = self.on_decode_error
         # QoS: Reset prefetch window.
         self.qos = QoS(self.task_consumer,
                        self.initial_prefetch_count, self.logger)
-        self.qos.update() # enable prefetch_count QoS.
+        self.qos.update()                       # enable prefetch_count QoS.
 
-        self.task_consumer.on_decode_error = self.on_decode_error
         self.broadcast_consumer = BroadcastConsumer(self.connection,
                                                     hostname=self.hostname)
         self.task_consumer.register_callback(self.receive_message)
@@ -394,10 +432,13 @@ class CarrotListener(object):
         self.event_dispatcher = EventDispatcher(self.connection,
                                                 hostname=self.hostname,
                                                 enabled=self.send_events)
-        self.heart = Heart(self.event_dispatcher)
-        self.heart.start()
+        self.restart_heartbeat()
 
         self._state = RUN
+
+    def restart_heartbeat(self):
+        self.heart = Heart(self.event_dispatcher)
+        self.heart.start()
 
     def _mainloop(self, **kwargs):
         while 1:
@@ -428,7 +469,7 @@ class CarrotListener(object):
         def _establish_connection():
             """Establish a connection to the broker."""
             conn = establish_connection()
-            conn.connect() # Connection is established lazily, so connect.
+            conn.connect()                              # evaluate connection
             return conn
 
         if not conf.BROKER_CONNECTION_RETRY:
@@ -447,3 +488,11 @@ class CarrotListener(object):
         """
         self.logger.debug("CarrotListener: Stopping consumers...")
         self.stop_consumers(close=False)
+
+    @property
+    def info(self):
+        conninfo = {}
+        if self.connection:
+            conninfo = get_broker_info(self.connection)
+        return {"broker": conninfo,
+                "prefetch_count": self.qos.next}
