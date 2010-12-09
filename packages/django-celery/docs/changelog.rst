@@ -1,0 +1,178 @@
+================
+ Change history
+================
+
+.. contents::
+    :local:
+
+.. _version-2.1.4:
+
+2.1.4
+=====
+:release-date: 2010-12-03 12:00 PM CEST
+
+.. _v214-fixes:
+
+Fixes
+-----
+
+* `djcelerymon`: Optimized the SQL queries used when displaying the task list.
+
+* `Admin`: Add a warning to the Edit Periodic Task page if the database
+  scheduler is not used (Note: To remove this warning you can't just use
+  the `-S` argument to `celerybeat`, but have to set the
+  `CELERYBEAT_SCHEDULER` setting).
+
+* demoproject: Use database backend by default, and call
+  `djcelery.setup_loader` in settings.
+
+* `DatabaseScheduler`: Properly handle periodic tasks being removed from
+   the database.
+
+* `DatabaseScheduler`: Added `ModelEntry._default_now` to provide the default
+   value for when `last_run_at` is not set.
+
+.. _version-2.1.2:
+
+2.1.2
+=====
+:release-date: 2010-10-29 03:00 PM CEST
+
+* Documentation: Fixed typo `celery.contrib.test_runner`
+    -> `djcelery.contrib.test_runner`
+
+* Now using Django's `mail_admins` to send task error e-mails.
+
+    Which means custom Django e-mail backends can be used.
+
+    See http://github.com/ask/django-celery/issues#issue/15
+
+* djcelerymon command: Disable the django reloader feature of runserver,
+  as this caused it to spawn two djcelerymon processes at the same time.
+
+* Fixed compatibility issue with Django 1.2 multi db.
+
+.. _version-2.1.1:
+
+2.1.1
+=====
+:release-date: 2010-10-14 02:00 PM CEST
+
+* Now depends on Celery v2.1.1.
+
+* Snapshots: Fixed bug with losing events.
+
+* Snapshots: Limited the number of worker timestamp updates to once every second.
+
+* Snapshot: Handle transaction manually and commit every 100 task updates.
+
+* snapshots: Can now configure when to expire task events.
+
+    New settings:
+
+    * ``CELERYCAM_EXPIRE_SUCCESS`` (default 1 day),
+    * ``CELERYCAM_EXPIRE_ERROR`` (default 3 days), and
+    * ``CELERYCAM_EXPIRE_PENDING`` (default 5 days).
+
+* Snapshots: ``TaskState.args`` and ``TaskState.kwargs`` are now
+  represented as ``TextField`` instead of ``CharField``.
+
+    If you need to represent arguments larger than 200 chars you have
+    to migrate the table.
+
+* ``transaction.commit_manually`` doesn't accept arguments on older
+  Django version.
+
+    Should now work with Django versions previous to v1.2.
+
+* The tests doesn't need :mod:`unittest2` anymore if running on Python 2.7.
+
+.. _version-2.1.0:
+
+2.1.0
+=====
+:release-date: 2010-10-08 12:00 PM CEST
+
+Important Notes
+---------------
+
+This release depends on Celery version 2.1.0.
+Be sure to read the Celery changelog before you upgrade:
+http://ask.github.com/celery/changelog.html#version-2-1-0
+
+News
+----
+
+* The periodic task schedule can now be stored in the database and edited via
+  the Django Admin interface.
+
+    To use the new database schedule you need to start ``celerybeat`` with the
+    following argument::
+
+        $ python manage.py celerybeat -S djcelery.schedulers.DatabaseScheduler
+
+    Note that you need to add your old periodic tasks to the database manually
+    (using the Django admin interface for example).
+
+* New Celery monitor for the Django Admin interface.
+
+    To start monitoring your workers you have to start your workers
+    in event mode::
+
+        $ python manage.py celeryd -E
+
+    (you can do this without restarting the server too::
+
+        >>> from celery.task.control import broadcast
+        >>> broadcast("enable_events")
+
+    You need to do a syncdb to create the new tables:
+
+        python manage.py syncdb
+
+    Then you need to start the snapshot camera::
+
+        $ python manage.py celerycam -f 2.0
+
+    This will take a snapshot of the events every 2 seconds and store it in
+    the database.
+
+Fixes
+-----
+
+* database backend: Now shows warning if polling results with transaction isolation level
+  repeatable-read on MySQL.
+
+    See http://github.com/ask/django-celery/issues/issue/6
+
+* database backend: get result does no longer store the default result to
+  database.
+
+    See http://github.com/ask/django-celery/issues/issue/6
+
+2.0.2
+=====
+
+Important notes
+---------------
+
+* Due to some applications loading the Django models lazily, it is recommended
+  that you add the following lines to your ``settings.py``::
+
+       import djcelery
+       djcelery.setup_loader()
+
+    This will ensure the Django celery loader is set even though the
+    model modules haven't been imported yet.
+
+News
+----
+
+* ``djcelery.views.registered_tasks``: Added a view to list currently known
+  tasks.
+
+2.0.0
+=====
+:release-date: 2010-07-02 02:30 P.M CEST
+
+* Initial release
