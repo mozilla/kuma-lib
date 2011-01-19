@@ -64,3 +64,6 @@
 [submodule "src/django-timezones"]
 	path = src/django-timezones
 	url = git://github.com/brosner/django-timezones.git
+[submodule "src/sphinxapi"]
+	path = src/sphinxapi
+	url = git://github.com/jsocol/sphinxapi

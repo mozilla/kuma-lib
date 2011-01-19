@@ -54,3 +54,4 @@ src/django-extensions
 src/django
 src/tweepy
 src/django-csp
+src/sphinxapi
