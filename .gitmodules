@@ -67,3 +67,6 @@
 [submodule "src/sphinxapi"]
 	path = src/sphinxapi
 	url = git://github.com/jsocol/sphinxapi
+[submodule "src/django-waffle"]
+	path = src/django-waffle
+	url = git://github.com/jsocol/django-waffle.git
