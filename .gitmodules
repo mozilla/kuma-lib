@@ -76,3 +76,6 @@
 [submodule "src/django-recaptcha"]
 	path = src/django-recaptcha
 	url = git://github.com/mozilla/django-recaptcha.git
+[submodule "src/python-magic"]
+	path = src/python-magic
+	url = git://github.com/ahupp/python-magic.git

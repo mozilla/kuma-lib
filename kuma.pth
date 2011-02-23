@@ -36,6 +36,7 @@ packages/django-threadedcomments
 packages/feedparser
 packages/jsonpickle
 packages/lockfile
+packages/recaptcha-client
 src
 src/django-cronjobs
 src/django-cache-machine
@@ -63,3 +64,4 @@ src/django-waffle
 src/sphinxapi
 src/django-mobility
 src/django-recaptcha
+src/python-magic
