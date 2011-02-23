@@ -31,6 +31,11 @@ packages/pyparsing
 packages/sqlalchemy
 packages/translate-toolkit
 packages/nose
+packages/django-tagging
+packages/django-threadedcomments
+packages/feedparser
+packages/jsonpickle
+packages/lockfile
 src
 src/django-cronjobs
 src/django-cache-machine
@@ -57,3 +62,4 @@ src/django-csp
 src/django-waffle
 src/sphinxapi
 src/django-mobility
+src/django-recaptcha
