@@ -6,7 +6,7 @@ except ImportError:
     from setuptools import setup, find_packages
 
 setup(name='recaptcha-client',
-      version='1.0.5',
+      version='1.0.6',
       url = "http://recaptcha.net",
       author = "Ben Maurer",
       author_email = "support@recaptcha.net",
@@ -16,8 +16,8 @@ Provides a CAPTCHA for Python using the reCAPTCHA service. Does not require
 any imaging libraries because the CAPTCHA is served directly from reCAPTCHA.
 Also allows you to securely obfuscate emails with Mailhide. This functionality
 requires pycrypto. This library requires two types of API keys. If you'd like
-to use the CAPTCHA, you'll need a key from http://recaptcha.net/api/getkey.
-For Mailhide, you'll need a key from http://mailhide.recaptcha.net/apikey.
+to use the CAPTCHA, you'll need a key from https://www.google.com/recaptcha/admin/create.
+For Mailhide, you'll need a key from http://www.google.com/recaptcha/mailhide/apikey.
 
 The trunk can be checked out from
 http://recaptcha.googlecode.com/svn/trunk/recaptcha-plugins/python,

@@ -6,7 +6,7 @@ try:
 except:
     raise Exception ("You need the pycrpyto library: http://cheeseshop.python.org/pypi/pycrypto/")
 
-MAIL_HIDE_BASE="http://mailhide.recaptcha.net"
+MAIL_HIDE_BASE="http://www.google.com/recaptcha/mailhide"
 
 def asurl (email,
                  public_key,
