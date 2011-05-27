@@ -79,3 +79,6 @@
 [submodule "src/python-magic"]
 	path = src/python-magic
 	url = git://github.com/ahupp/python-magic.git
+[submodule "src/smuggler"]
+	path = src/smuggler
+	url = git://github.com/semente/django-smuggler.git
