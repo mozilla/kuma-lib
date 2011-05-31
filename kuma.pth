@@ -38,7 +38,6 @@ packages/feedparser
 packages/jsonpickle
 packages/lockfile
 packages/recaptcha-client
-packages/south
 src
 src/django-cronjobs
 src/django-cache-machine
