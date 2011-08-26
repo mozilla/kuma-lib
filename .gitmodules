@@ -82,3 +82,6 @@
 [submodule "src/smuggler"]
 	path = src/smuggler
 	url = git://github.com/semente/django-smuggler.git
+[submodule "src/funfactory"]
+	path = src/funfactory
+	url = git://github.com/mozilla/funfactory.git
