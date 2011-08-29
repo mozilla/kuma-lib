@@ -85,3 +85,6 @@
 [submodule "lib/phpbb3-static"]
 	path = lib/phpbb3-static
 	url = git://github.com/mozilla/phpbb3-static.git
+[submodule "src/django-recaptcha"]
+	path = src/django-recaptcha
+	url = git://github.com/praekelt/django-recaptcha.git
