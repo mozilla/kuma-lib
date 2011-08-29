@@ -85,3 +85,6 @@
 [submodule "src/funfactory"]
 	path = src/funfactory
 	url = git://github.com/mozilla/funfactory.git
+[submodule "lib/phpbb3-static"]
+	path = lib/phpbb3-static
+	url = git://github.com/mozilla/phpbb3-static.git
