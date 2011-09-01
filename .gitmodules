@@ -88,3 +88,6 @@
 [submodule "src/django-recaptcha"]
 	path = src/django-recaptcha
 	url = git://github.com/praekelt/django-recaptcha.git
+[submodule "src/django-constance"]
+	path = src/django-constance
+	url = git://github.com/jezdez/django-constance.git
