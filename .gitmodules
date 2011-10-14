@@ -91,3 +91,6 @@
 [submodule "src/django-constance"]
 	path = src/django-constance
 	url = git://github.com/jezdez/django-constance.git
+[submodule "src/requests"]
+	path = src/requests
+	url = git://github.com/kennethreitz/requests.git
