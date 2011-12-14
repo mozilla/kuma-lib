@@ -97,3 +97,6 @@
 [submodule "src/nuggets"]
 	path = src/nuggets
 	url = git://github.com/mozilla/nuggets.git
+[submodule "src/django-browserid"]
+	path = src/django-browserid
+	url = git://github.com/mozilla/django-browserid.git
