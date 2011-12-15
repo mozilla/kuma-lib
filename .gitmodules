@@ -100,3 +100,6 @@
 [submodule "src/django-browserid"]
 	path = src/django-browserid
 	url = git://github.com/mozilla/django-browserid.git
+[submodule "src/soapbox"]
+	path = src/soapbox
+	url = git://github.com/ubernostrum/django-soapbox.git
