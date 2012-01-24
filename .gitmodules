@@ -103,3 +103,6 @@
 [submodule "src/soapbox"]
 	path = src/soapbox
 	url = git://github.com/ubernostrum/django-soapbox.git
+[submodule "src/basket-client"]
+	path = src/basket-client
+	url = git://github.com/mozilla/basket-client.git
