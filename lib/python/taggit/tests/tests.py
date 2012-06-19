@@ -147,6 +147,9 @@ class TaggableManagerTestCase(BaseTaggingTestCase):
         # + 6 queries to create the intermediary things (including SELECTs, to
         #     make sure we don't double create.
         self.assert_num_queries(10, apple.tags.add, "red", "delicious", "green")
+        # If we try to add a tag with the same name as an existing tag but
+        # with a different case, the existing tag should be recognized
+        self.assert_num_queries(2, apple.tags.add, "Red")
 
         pear = self.food_model.objects.create(name="pear")
         #   1 query to see which tags exist
@@ -164,6 +167,10 @@ class TaggableManagerTestCase(BaseTaggingTestCase):
         apple = self.food_model.objects.create(name="apple")
         apple.tags.add("red")
         self.assert_tags_equal(apple.tags.all(), ["red"])
+        # Testing that this tag is found as already existing, although
+        # with a different case
+        apple.tags.add("Red")
+        self.assert_tags_equal(apple.tags.all(), ["red"])
         strawberry = self.food_model.objects.create(name="strawberry")
         strawberry.tags.add("red")
         apple.delete()
@@ -179,6 +186,12 @@ class TaggableManagerTestCase(BaseTaggingTestCase):
         self.food_model.objects.all().delete()
 
         self.assert_tags_equal(kitty.tags.all(), ["feline"])
+
+    def test_case_insensitive_tag_remove(self):
+        apple = self.food_model.objects.create(name="apple")
+        apple.tags.add("red", "green")
+        apple.tags.remove("Red")
+        self.assert_tags_equal(apple.tags.all(), ["green"])
 
     def test_lookup_by_tag(self):
         apple = self.food_model.objects.create(name="apple")

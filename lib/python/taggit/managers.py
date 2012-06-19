@@ -160,15 +160,20 @@ class _TaggableManager(models.Manager):
             if not isinstance(t, self.through.tag_model())
         ])
         tag_objs = set(tags) - str_tags
-        # If str_tags has 0 elements Django actually optimizes that to not do a
-        # query.  Malcolm is very smart.
-        existing = self.through.tag_model().objects.filter(
-            name__in=str_tags
-        )
-        tag_objs.update(existing)
 
-        for new_tag in str_tags - set(t.name for t in existing):
-            tag_objs.add(self.through.tag_model().objects.create(name=new_tag))
+        # Checking for existing tags irrespective of the case
+        if str_tags:
+            q = models.Q()
+            for str_tag in str_tags:
+                q |= models.Q(name__iexact=str_tag)
+
+            existing = self.through.tag_model().objects.filter(q)
+            tag_objs.update(existing)
+            existing_low = [t.name.lower() for t in existing]
+            new_tags = [t for t in str_tags if t.lower() not in existing_low]
+
+            for new_tag in new_tags:
+                tag_objs.add(self.through.tag_model().objects.create(name=new_tag))
 
         for tag in tag_objs:
             self.through.objects.get_or_create(tag=tag, **self._lookup_kwargs())
@@ -180,8 +185,12 @@ class _TaggableManager(models.Manager):
 
     @require_instance_manager
     def remove(self, *tags):
+        q = models.Q()
+        for tag in tags:
+            q |= models.Q(tag__name__iexact=tag)
+
         self.through.objects.filter(**self._lookup_kwargs()).filter(
-            tag__name__in=tags).delete()
+            q).delete()
 
     @require_instance_manager
     def clear(self):
