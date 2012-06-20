@@ -6,16 +6,19 @@ import os
 # If your extensions are in another directory, add it here. If the directory
 # is relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
-sys.path.append(os.path.join(os.pardir, "tests"))
-from django.core.management import setup_environ
-import settings
-setup_environ(settings)
+sys.path.insert(0, os.getcwd())
+import django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
+if django.VERSION < (1, 4):
+    from django.core.management import setup_environ
+    setup_environ(__import__(os.environ["DJANGO_SETTINGS_MODULE"]))
 import djcelery
 
 # General configuration
 # ---------------------
 
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.coverage',
+             'sphinxcontrib.issuetracker']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['.templates']
@@ -28,7 +31,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'django-celery'
-copyright = u'2009, Ask Solem'
+copyright = u'2009-2011, Ask Solem'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -72,3 +75,8 @@ html_sidebars = {
     '**': ['sidebarlogo.html', 'localtoc.html', 'relations.html',
            'sourcelink.html', 'searchbox.html'],
 }
+
+### Issuetracker
+issuetracker = "github"
+issuetracker_project = "ask/django-celery"
+issuetracker_issue_pattern = r'[Ii]ssue #(\d+)'

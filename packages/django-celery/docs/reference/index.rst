@@ -8,6 +8,7 @@
 .. toctree::
     :maxdepth: 2
 
+    djcelery.app
     djcelery.views
     djcelery.urls
     djcelery.models
@@ -18,4 +19,5 @@
     djcelery.backends.database
     djcelery.backends.cache
     djcelery.contrib.test_runner
+    djcelery.humanize
     djcelery.utils

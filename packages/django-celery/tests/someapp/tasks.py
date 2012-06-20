@@ -1,8 +1,15 @@
-from celery.task import tasks, Task
+from celery.task import task
+
+from django.db.models import get_model
 
 
-class SomeAppTask(Task):
-    name = "c.unittest.SomeAppTask"
+@task(name="c.unittest.SomeAppTask")
+def SomeAppTask(**kwargs):
+    return 42
 
-    def run(self, **kwargs):
-        return 42
+
+@task(name="c.unittest.SomeModelTask")
+def SomeModelTask(pk):
+    model = get_model("someapp", "Thing")
+    thing = model.objects.get(pk=pk)
+    return thing.name
