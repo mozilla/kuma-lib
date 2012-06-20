@@ -157,7 +157,7 @@ class _TaggableManager(models.Manager):
         str_tags = set([
             t
             for t in tags
-            if not isinstance(t, self.through.tag_model())
+            if isinstance(t, basestring)
         ])
         tag_objs = set(tags) - str_tags
 
