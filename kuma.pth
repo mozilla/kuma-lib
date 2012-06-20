@@ -24,6 +24,8 @@ packages/python-memcached
 packages/selenium
 packages/mock
 packages/celery
+packages/kombu
+packages/ordereddict
 packages/django-celery
 packages/html5lib/src
 packages/logilab-common

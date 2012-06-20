@@ -17,8 +17,8 @@ You can start celeryd to run in the foreground by executing the command::
     $ celeryd --loglevel=INFO
 
 You probably want to use a daemonization tool to start
-``celeryd`` in the background.  See :ref:`daemonizing` for help
-using ``celeryd`` with popular daemonization tools.
+`celeryd` in the background.  See :ref:`daemonizing` for help
+using `celeryd` with popular daemonization tools.
 
 For a full list of available command line options see
 :mod:`~celery.bin.celeryd`, or simply do::
@@ -27,7 +27,7 @@ For a full list of available command line options see
 
 You can also start multiple workers on the same machine. If you do so
 be sure to give a unique name to each individual worker by specifying a
-host name with the `--hostname|-n` argument::
+host name with the :option:`--hostname|-n` argument::
 
     $ celeryd --loglevel=INFO --concurrency=10 -n worker1.example.com
     $ celeryd --loglevel=INFO --concurrency=10 -n worker2.example.com
@@ -75,17 +75,20 @@ arguments as it was started with.
 Concurrency
 ===========
 
-Multiprocessing is used to perform concurrent execution of tasks.  The number
-of worker processes can be changed using the ``--concurrency`` argument and
-defaults to the number of CPUs available on the machine.
+By default multiprocessing is used to perform concurrent execution of tasks,
+but you can also use :ref:`Eventlet <concurrency-eventlet>`.  The number
+of worker processes/threads can be changed using the :option:`--concurrency`
+argument and defaults to the number of CPUs available on the machine.
 
-More worker processes are usually better, but there's a cut-off point where
-adding more processes affects performance in negative ways.
-There is even some evidence to support that having multiple celeryd's running,
-may perform better than having a single worker.  For example 3 celeryd's with
-10 worker processes each.  You need to experiment to find the numbers that
-works best for you, as this varies based on application, work load, task
-run times and other factors.
+.. admonition:: Number of processes (multiprocessing)
+
+    More worker processes are usually better, but there's a cut-off point where
+    adding more processes affects performance in negative ways.
+    There is even some evidence to support that having multiple celeryd's running,
+    may perform better than having a single worker.  For example 3 celeryd's with
+    10 worker processes each.  You need to experiment to find the numbers that
+    works best for you, as this varies based on application, work load, task
+    run times and other factors.
 
 .. _worker-persistent-revokes:
 
@@ -96,7 +99,7 @@ Revoking tasks works by sending a broadcast message to all the workers,
 the workers then keep a list of revoked tasks in memory.
 
 If you want tasks to remain revoked after worker restart you need to
-specify a file for these to be stored in, either by using the ``--statedb``
+specify a file for these to be stored in, either by using the `--statedb`
 argument to :mod:`~celery.bin.celeryd` or the :setting:`CELERYD_STATE_DB`
 setting.  See :setting:`CELERYD_STATE_DB` for more information.
 
@@ -112,15 +115,15 @@ waiting for some event that will never happen you will block the worker
 from processing new tasks indefinitely.  The best way to defend against
 this scenario happening is enabling time limits.
 
-The time limit (``--time-limit``) is the maximum number of seconds a task
+The time limit (`--time-limit`) is the maximum number of seconds a task
 may run before the process executing it is terminated and replaced by a
-new process.  You can also enable a soft time limit (``--soft-time-limit``),
+new process.  You can also enable a soft time limit (`--soft-time-limit`),
 this raises an exception the task can catch to clean up before the hard
 time limit kills it:
 
 .. code-block:: python
 
-    from celery.decorators import task
+    from celery.task import task
     from celery.exceptions import SoftTimeLimitExceeded
 
     @task()
@@ -135,14 +138,34 @@ Time limits can also be set using the :setting:`CELERYD_TASK_TIME_LIMIT` /
 
 .. note::
 
-    Time limits does not currently work on Windows.
+    Time limits do not currently work on Windows and other
+    platforms that do not support the ``SIGUSR1`` signal.
+
+
+Changing time limits at runtime
+-------------------------------
+.. versionadded:: 2.3
+
+You can change the soft and hard time limits for a task by using the
+``time_limit`` remote control command.
+
+Example changing the time limit for the ``tasks.crawl_the_web`` task
+to have a soft time limit of one minute, and a hard time limit of
+two minutes::
+
+    >>> from celery.task import control
+    >>> control.time_limit("tasks.crawl_the_web",
+                           soft=60, hard=120, reply=True)
+    [{'worker1.example.com': {'ok': 'time limits set successfully'}}]
+
+Only tasks that starts executing after the time limit change will be affected.
 
 .. _worker-maxtasksperchild:
 
 Max tasks per child setting
 ===========================
 
-.. versionadded: 2.0
+.. versionadded:: 2.0
 
 With this option you can configure the maximum number of tasks
 a worker can execute before it's replaced by a new process.
@@ -150,8 +173,57 @@ a worker can execute before it's replaced by a new process.
 This is useful if you have memory leaks you have no control over
 for example from closed source C extensions.
 
-The option can be set using the ``--maxtasksperchild`` argument
-to ``celeryd`` or using the :setting:`CELERYD_MAX_TASKS_PER_CHILD` setting.
+The option can be set using the `--maxtasksperchild` argument
+to `celeryd` or using the :setting:`CELERYD_MAX_TASKS_PER_CHILD` setting.
+
+.. _worker-autoreload:
+
+Autoreloading
+=============
+
+.. versionadded:: 2.5
+
+Starting :program:`celeryd` with the :option:`--autoreload` option will
+enable the worker to watch for file system changes to all imported task
+modules imported (and also any non-task modules added to the
+:setting:`CELERY_IMPORTS` setting or the :option:`-I|--include` option).
+
+This is an experimental feature intended for use in development only,
+using auto-reload in production is discouraged as the behavior of reloading
+a module in Python is undefined, and may cause hard to diagnose bugs and
+crashes.  Celery uses the same approach as the auto-reloader found in e.g.
+the Django ``runserver`` command.
+
+When auto-reload is enabled the worker starts an additional thread
+that watches for changes in the file system.  New modules are imported,
+and already imported modules are reloaded whenever a change is detected,
+and if the processes pool is used the child processes will finish the work
+they are doing and exit, so that they can be replaced by fresh processes
+effectively reloading the code.
+
+File system notification backends are pluggable, and it comes with three
+implementations:
+
+* inotify (Linux)
+
+    Used if the :mod:`pyinotify` library is installed.
+    If you are running on Linux this is the recommended implementation,
+    to install the :mod:`pyinotify` library you have to run the following
+    command::
+
+        $ pip install pyinotify
+
+* kqueue (OS X/BSD)
+
+* stat
+
+    The fallback implementation simply polls the files using ``stat`` and is very
+    expensive.
+
+You can force an implementation by setting the :envvar:`CELERYD_FSNOTIFY`
+environment variable::
+
+    $ env CELERYD_FSNOTIFY=stat celeryd -l info --autoreload
 
 .. _worker-remote-control:
 
@@ -201,7 +273,7 @@ Sending the :control:`rate_limit` command and keyword arguments::
     ...                                    "rate_limit": "200/m"})
 
 This will send the command asynchronously, without waiting for a reply.
-To request a reply you have to use the ``reply`` argument::
+To request a reply you have to use the `reply` argument::
 
     >>> broadcast("rate_limit", {"task_name": "myapp.mytask",
     ...                          "rate_limit": "200/m"}, reply=True)
@@ -209,7 +281,7 @@ To request a reply you have to use the ``reply`` argument::
      {'worker2.example.com': 'New rate limit set successfully'},
      {'worker3.example.com': 'New rate limit set successfully'}]
 
-Using the ``destination`` argument you can specify a list of workers
+Using the `destination` argument you can specify a list of workers
 to receive the command::
 
     >>> broadcast
@@ -230,14 +302,14 @@ using :func:`~celery.task.control.broadcast`.
 Rate limits
 -----------
 
-Example changing the rate limit for the ``myapp.mytask`` task to accept
-200 tasks a minute on all servers:
+Example changing the rate limit for the `myapp.mytask` task to accept
+200 tasks a minute on all servers::
 
     >>> from celery.task.control import rate_limit
     >>> rate_limit("myapp.mytask", "200/m")
 
 Example changing the rate limit on a single host by specifying the
-destination hostname::
+destination host name::
 
     >>> rate_limit("myapp.mytask", "200/m",
     ...            destination=["worker1.example.com"])
@@ -247,6 +319,39 @@ destination hostname::
     This won't affect workers with the
     :setting:`CELERY_DISABLE_RATE_LIMITS` setting on. To re-enable rate limits
     then you have to restart the worker.
+
+.. control:: revoke
+
+Revoking tasks
+--------------
+
+All worker nodes keeps a memory of revoked task ids, either in-memory or
+persistent on disk (see :ref:`worker-persistent-revokes`).
+
+When a worker receives a revoke request it will skip executing
+the task, but it won't terminate an already executing task unless
+the `terminate` option is set.
+
+If `terminate` is set the worker child process processing the task
+will be terminated.  The default signal sent is `TERM`, but you can
+specify this using the `signal` argument.  Signal can be the uppercase name
+of any signal defined in the :mod:`signal` module in the Python Standard
+Library.
+
+Terminating a task also revokes it.
+
+**Example**
+
+::
+
+    >>> from celery.task.control import revoke
+    >>> revoke("d9078da5-9915-40a0-bfa1-392c7bde42ed")
+
+    >>> revoke("d9078da5-9915-40a0-bfa1-392c7bde42ed",
+    ...        terminate=True)
+
+    >>> revoke("d9078da5-9915-40a0-bfa1-392c7bde42ed",
+    ...        terminate=True, signal="SIGKILL")
 
 .. control:: shutdown
 
@@ -274,7 +379,7 @@ a custom timeout::
      {'worker2.example.com': 'pong'},
      {'worker3.example.com': 'pong'}]
 
-:func:`~celery.task.control.ping` also supports the ``destination`` argument,
+:func:`~celery.task.control.ping` also supports the `destination` argument,
 so you can specify which workers to ping::
 
     >>> ping(['worker2.example.com', 'worker3.example.com'])
@@ -289,14 +394,67 @@ so you can specify which workers to ping::
 Enable/disable events
 ---------------------
 
-You can enable/disable events by using the ``enable_events``,
-``disable_events`` commands.  This is useful to temporarily monitor
+You can enable/disable events by using the `enable_events`,
+`disable_events` commands.  This is useful to temporarily monitor
 a worker using :program:`celeryev`/:program:`celerymon`.
 
 .. code-block:: python
 
     >>> broadcast("enable_events")
     >>> broadcast("disable_events")
+
+Adding/Reloading modules
+------------------------
+
+.. versionadded:: 2.5
+
+The remote control command ``pool_restart`` sends restart requests to
+the workers child processes.  It is particularly useful for forcing
+the worker to import new modules, or for reloading already imported
+modules.  This command does not interrupt executing tasks.
+
+Example
+~~~~~~~
+
+Running the following command will result in the `foo` and `bar` modules
+being imported by the worker processes:
+
+.. code-block:: python
+
+    >>> from celery.task.control import broadcast
+    >>> broadcast("pool_restart", arguments={"modules": ["foo", "bar"]})
+
+Use the ``reload`` argument to reload modules it has already imported:
+
+.. code-block:: python
+
+    >>> broadcast("pool_restart", arguments={"modules": ["foo"],
+                                             "reload": True})
+
+If you don't specify any modules then all known tasks modules will
+be imported/reloaded:
+
+.. code-block:: python
+
+    >>> broadcast("pool_restart", arguments={"reload": True})
+
+The ``modules`` argument is a list of modules to modify. ``reload``
+specifies whether to reload modules if they have previously been imported.
+By default ``reload`` is disabled. The `pool_restart` command uses the
+Python :func:`reload` function to reload modules, or you can provide
+your own custom reloader by passing the ``reloader`` argument.
+
+.. note::
+
+    Module reloading comes with caveats that are documented in :func:`reload`.
+    Please read this documentation and make sure your modules are suitable
+    for reloading.
+
+.. seealso::
+
+    - http://pyunit.sourceforge.net/notes/reloading.html
+    - http://www.indelible.org/ink/python-reloading/
+    - http://docs.python.org/library/functions.html#reload
 
 .. _worker-custom-control-commands:
 
@@ -307,7 +465,7 @@ Remote control commands are registered in the control panel and
 they take a single argument: the current
 :class:`~celery.worker.control.ControlDispatch` instance.
 From there you have access to the active
-:class:`celery.worker.listener.CarrotListener` if needed.
+:class:`~celery.worker.consumer.Consumer` if needed.
 
 Here's an example control command that restarts the broker connection:
 
@@ -318,7 +476,7 @@ Here's an example control command that restarts the broker connection:
     @Panel.register
     def reset_connection(panel):
         panel.logger.critical("Connection reset by remote control.")
-        panel.listener.reset_connection()
+        panel.consumer.reset_connection()
         return {"ok": "connection reset"}
 
 
@@ -355,9 +513,9 @@ Dump of registered tasks
 ------------------------
 
 You can get a list of tasks registered in the worker using the
-:meth:`~celery.task.control.inspect.registered_tasks`::
+:meth:`~celery.task.control.inspect.registered`::
 
-    >>> i.registered_tasks()
+    >>> i.registered()
     [{'worker1.example.com': ['celery.delete_expired_task_meta',
                               'celery.execute_remote',
                               'celery.map_async',

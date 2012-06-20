@@ -5,147 +5,147 @@ import sys
 import codecs
 import platform
 
+if sys.version_info < (2, 5):
+    raise Exception("Celery requires Python 2.5 or higher.")
+
 try:
-    from setuptools import setup, find_packages, Command
+    from setuptools import setup, find_packages
     from setuptools.command.test import test
-    from setuptools.command.install import install
 except ImportError:
+    raise
     from ez_setup import use_setuptools
     use_setuptools()
-    from setuptools import setup, find_packages, Command
-    from setuptools.command.test import test
-    from setuptools.command.install import install
+    from setuptools import setup, find_packages           # noqa
+    from setuptools.command.test import test              # noqa
 
-import celery as distmeta
+NAME = "celery"
+entrypoints = {}
+extra = {}
 
+# -*- Classifiers -*-
 
-def with_dist_not_in_path(fun):
+classes = """
+    Development Status :: 5 - Production/Stable
+    License :: OSI Approved :: BSD License
+    Topic :: System :: Distributed Computing
+    Topic :: Software Development :: Object Brokering
+    Programming Language :: Python
+    Programming Language :: Python :: 2
+    Programming Language :: Python :: 2.5
+    Programming Language :: Python :: 2.6
+    Programming Language :: Python :: 2.7
+    Programming Language :: Python :: 3
+    Programming Language :: Python :: 3.2
+    Programming Language :: Python :: Implementation :: CPython
+    Programming Language :: Python :: Implementation :: PyPy
+    Programming Language :: Python :: Implementation :: Jython
+    Operating System :: OS Independent
+    Operating System :: POSIX
+    Operating System :: Microsoft :: Windows
+    Operating System :: MacOS :: MacOS X
+"""
+classifiers = [s.strip() for s in classes.split('\n') if s]
 
-    def _inner(*args, **kwargs):
-        cwd = os.getcwd()
-        removed = []
-        for path in (cwd, cwd + "/", "."):
-            try:
-                i = sys.path.index(path)
-            except ValueError:
-                pass
-            else:
-                removed.append((i, path))
-                sys.path.remove(path)
+# -*- Python 3 -*-
+is_py3k  = sys.version_info >= (3, 0)
+if is_py3k:
+    extra.update(use_2to3=True)
 
-        try:
-            dist_module = sys.modules.pop("celery", None)
-            try:
-                import celery as existing_module
-            except ImportError, exc:
-                pass
-            else:
-                kwargs["celery"] = existing_module
-                return fun(*args, **kwargs)
-        finally:
-            for i, path in removed:
-                sys.path.insert(i, path)
-            if dist_module:
-                sys.modules["celery"] = dist_module
+# -*- Distribution Meta -*-
 
-    return _inner
+import re
+re_meta = re.compile(r'__(\w+?)__\s*=\s*(.*)')
+re_vers = re.compile(r'VERSION\s*=\s*\((.*?)\)')
+re_doc = re.compile(r'^"""(.+?)"""')
+rq = lambda s: s.strip("\"'")
 
-
-class Upgrade(object):
-    old_modules = ("platform", )
-
-    def run(self, dist=False):
-        detect_ = self.detect_existing_installation
-        if not dist:
-            detect = with_dist_not_in_path(detect_)
-        else:
-            detect = lambda: detect_(distmeta)
-        path = detect()
-        if path:
-            self.remove_modules(path)
-
-    def detect_existing_installation(self, celery=None):
-        path = os.path.dirname(celery.__file__)
-        sys.stderr.write("* Upgrading old Celery from: \n\t%r\n" % path)
-        return path
-
-    def try_remove(self, file):
-        try:
-            os.remove(file)
-        except OSError:
-            pass
-
-    def remove_modules(self, path):
-        for module_name in self.old_modules:
-            sys.stderr.write("* Removing old %s.py...\n" % module_name)
-            self.try_remove(os.path.join(path, "%s.py" % module_name))
-            self.try_remove(os.path.join(path, "%s.pyc" % module_name))
+def add_default(m):
+    attr_name, attr_value = m.groups()
+    return ((attr_name, rq(attr_value)), )
 
 
-class mytest(test):
-
-    def run(self, *args, **kwargs):
-        Upgrade().run(dist=True)
-        test.run(self, *args, **kwargs)
+def add_version(m):
+    v = list(map(rq, m.groups()[0].split(", ")))
+    return (("VERSION", ".".join(v[0:3]) + "".join(v[3:])), )
 
 
-class quicktest(mytest):
+def add_doc(m):
+    return (("doc", m.groups()[0]), )
+
+pats = {re_meta: add_default,
+        re_vers: add_version,
+        re_doc: add_doc}
+here = os.path.abspath(os.path.dirname(__file__))
+meta_fh = open(os.path.join(here, "celery/__init__.py"))
+try:
+    meta = {}
+    for line in meta_fh:
+        if line.strip() == '# -eof meta-':
+            break
+        for pattern, handler in pats.items():
+            m = pattern.match(line.strip())
+            if m:
+                meta.update(handler(m))
+finally:
+    meta_fh.close()
+
+# -*- Custom Commands -*-
+
+class quicktest(test):
     extra_env = dict(SKIP_RLIMITS=1, QUICKTEST=1)
 
     def run(self, *args, **kwargs):
         for env_name, env_value in self.extra_env.items():
             os.environ[env_name] = str(env_value)
-        mytest.run(self, *args, **kwargs)
+        test.run(self, *args, **kwargs)
 
-
-class upgrade(Command):
-    user_options = []
-
-    def run(self, *args, **kwargs):
-        Upgrade().run()
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-
-class upgrade_and_install(install):
-
-    def run(self, *args, **kwargs):
-        Upgrade().run()
-        install.run(self, *args, **kwargs)
-
+# -*- Installation Dependencies -*-
 
 install_requires = []
-
 try:
-    import importlib
+    import importlib  # noqa
 except ImportError:
     install_requires.append("importlib")
-
-
 install_requires.extend([
-    "python-dateutil",
-    "anyjson",
-    "carrot>=0.10.7",
-    "pyparsing",
+    "anyjson>=0.3.1",
+    "kombu>=2.1.8,<2.2.0",
 ])
+if is_py3k:
+    install_requires.append("python-dateutil>=2.0")
+else:
+    install_requires.append("python-dateutil>=1.5,<2.0")
 
 py_version = sys.version_info
-if sys.version_info < (2, 6):
+is_jython = sys.platform.startswith("java")
+is_pypy = hasattr(sys, "pypy_version_info")
+if sys.version_info < (2, 7):
+    install_requires.append("ordereddict") # Replacement for the ordered dict
+if sys.version_info < (2, 6) and not (is_jython or is_pypy):
     install_requires.append("multiprocessing")
-if sys.version_info < (2, 5):
-    install_requires.append("uuid")
+
+if is_jython:
+    install_requires.append("threadpool")
+    install_requires.append("simplejson")
+
+# -*- Tests Requires -*-
+
+tests_require = ["nose", "nose-cover3", "sqlalchemy", "mock", "cl"]
+if sys.version_info < (2, 7):
+    tests_require.append("unittest2")
+elif sys.version_info <= (2, 5):
+    tests_require.append("simplejson")
+
+# -*- Long Description -*-
 
 if os.path.exists("README.rst"):
     long_description = codecs.open("README.rst", "r", "utf-8").read()
 else:
     long_description = "See http://pypi.python.org/pypi/celery"
 
+# -*- Entry Points -*- #
 
-console_scripts = [
+console_scripts = entrypoints["console_scripts"] = [
+        'celeryd = celery.bin.celeryd:main',
         'celerybeat = celery.bin.celerybeat:main',
         'camqadm = celery.bin.camqadm:main',
         'celeryev = celery.bin.celeryev:main',
@@ -153,53 +153,27 @@ console_scripts = [
         'celeryd-multi = celery.bin.celeryd_multi:main',
 ]
 
-import platform
-if platform.system() == "Windows":
-    console_scripts.append('celeryd = celery.bin.celeryd:windows_main')
-else:
-    console_scripts.append('celeryd = celery.bin.celeryd:main')
+# bundles: Only relevant for Celery developers.
+entrypoints["bundle.bundles"] = ["celery = celery.contrib.bundles:bundles"]
 
+# -*- %%% -*-
 
 setup(
     name="celery",
-    version=distmeta.__version__,
-    description=distmeta.__doc__,
-    author=distmeta.__author__,
-    author_email=distmeta.__contact__,
-    url=distmeta.__homepage__,
+    version=meta["VERSION"],
+    description=meta["doc"],
+    author=meta["author"],
+    author_email=meta["contact"],
+    url=meta["homepage"],
     platforms=["any"],
     license="BSD",
     packages=find_packages(exclude=['ez_setup', 'tests', 'tests.*']),
-    scripts=["bin/celeryd", "bin/celerybeat",
-             "bin/camqadm", "bin/celeryd-multi",
-             "bin/celeryev"],
     zip_safe=False,
     install_requires=install_requires,
-    tests_require=['nose', 'nose-cover3', 'unittest2', 'simplejson'],
-    cmdclass={"install": upgrade_and_install,
-              "upgrade": upgrade,
-              "test": mytest,
-              "quicktest": quicktest},
+    tests_require=tests_require,
     test_suite="nose.collector",
-    classifiers=[
-        "Development Status :: 5 - Production/Stable",
-        "Operating System :: OS Independent",
-        "Environment :: No Input/Output (Daemon)",
-        "Intended Audience :: Developers",
-        "License :: OSI Approved :: BSD License",
-        "Operating System :: POSIX",
-        "Topic :: Communications",
-        "Topic :: System :: Distributed Computing",
-        "Topic :: Software Development :: Libraries :: Python Modules",
-        "Programming Language :: Python",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.4",
-        "Programming Language :: Python :: 2.5",
-        "Programming Language :: Python :: 2.6",
-        "Programming Language :: Python :: 2.7",
-    ],
-    entry_points={
-        'console_scripts': console_scripts,
-    },
+    cmdclass={"quicktest": quicktest},
+    classifiers=classifiers,
+    entry_points=entrypoints,
     long_description=long_description,
-)
+    **extra)

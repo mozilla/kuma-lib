@@ -1,8 +1,8 @@
 .. _guide-monitoring:
 
-==================
- Monitoring Guide
-==================
+=================================
+ Monitoring and Management Guide
+=================================
 
 .. contents::
     :local:
@@ -21,6 +21,7 @@ Workers
 =======
 
 .. _monitoring-celeryctl:
+
 
 celeryctl: Management Utility
 -----------------------------
@@ -41,6 +42,16 @@ or to get help for a specific command do::
 Commands
 ~~~~~~~~
 
+* **shell**: Drop into a Python shell.
+
+  The locals will include the ``celery`` variable, which is the current app.
+  Also all known tasks will be automatically added to locals (unless the
+  ``--without-tasks`` flag is set).
+
+  Uses Ipython, bpython, or regular python in that order if installed.
+  You can force an implementation using ``--force-ipython|-I``,
+  ``--force-bpython|-B``, or ``--force-python|-P``.
+
 * **status**: List active nodes in this cluster
     ::
 
@@ -53,6 +64,15 @@ Commands
 
     Note that you can omit the name of the task as long as the
     task doesn't use a custom result backend.
+
+* **purge**: Purge messages from all configured task queues.
+    ::
+
+        $ celeryctl purge
+
+    .. warning::
+        There is no undo for this operation, and messages will
+        be permanently deleted!
 
 * **inspect active**: List active tasks
     ::
@@ -67,7 +87,7 @@ Commands
         $ celeryctl inspect scheduled
 
     These are tasks reserved by the worker because they have the
-    ``eta`` or ``countdown`` argument set.
+    `eta` or `countdown` argument set.
 
 * **inspect reserved**: List reserved tasks
     ::
@@ -83,12 +103,12 @@ Commands
 
         $ celeryctl inspect revoked
 
-* **inspect registered_tasks**: List registered tasks
+* **inspect registered**: List registered tasks
     ::
 
-        $ celeryctl inspect registered_tasks
+        $ celeryctl inspect registered
 
-* **inspect states**: Show worker statistics
+* **inspect stats**: Show worker statistics
     ::
 
         $ celeryctl inspect stats
@@ -103,12 +123,20 @@ Commands
 
         $ celeryctl inspect disable_events
 
+* **migrate**: Migrate tasks from one broker to another (**EXPERIMENTAL**).
+  ::
+
+        $ celeryctl migrate redis://localhost amqp://localhost
+
+  This command will migrate all the tasks on one broker to another.
+  As this command is new and experimental you should be sure to have
+  a backup of the data before proceeding.
 
 .. note::
 
     All ``inspect`` commands supports a ``--timeout`` argument,
     This is the number of seconds to wait for responses.
-    You may have to increase this timeout if you're getting empty responses
+    You may have to increase this timeout if you're not getting a response
     due to latency.
 
 .. _celeryctl-inspect-destination:
@@ -118,7 +146,7 @@ Specifying destination nodes
 
 By default the inspect commands operates on all workers.
 You can specify a single, or a list of workers by using the
-``--destination`` argument::
+`--destination` argument::
 
     $ celeryctl inspect -d w1,w2 reserved
 
@@ -161,7 +189,7 @@ If you haven't already enabled the sending of events you need to do so::
 
     $ python manage.py celeryctl inspect enable_events
 
-:Tip: You can enable events when the worker starts using the ``-E`` argument
+:Tip: You can enable events when the worker starts using the `-E` argument
       to :mod:`~celery.bin.celeryd`.
 
 Now that the camera has been started, and events have been enabled
@@ -189,7 +217,7 @@ While the frequency controls how often the camera thread wakes up,
 the rate limit controls how often it will actually take a snapshot.
 
 The rate limits can be specified in seconds, minutes or hours
-by appending ``/s``, ``/m`` or ``/h`` to the value.
+by appending `/s`, `/m` or `/h` to the value.
 Example: ``--maxrate=100/m``, means "hundred writes a minute".
 
 The rate limit is off by default, which means it will take a snapshot
@@ -226,12 +254,12 @@ module, and sets up the Django environment using the same settings::
     $ djcelerymon
 
 Database tables will be created the first time the monitor is run.
-By default an ``sqlite3`` database file named
+By default an `sqlite3` database file named
 :file:`djcelerymon.db` is used, so make sure this file is writeable by the
 user running the monitor.
 
 If you want to store the events in a different database, e.g. MySQL,
-then you can configure the ``DATABASE*`` settings directly in your Celery
+then you can configure the `DATABASE*` settings directly in your Celery
 config module.  See http://docs.djangoproject.com/en/dev/ref/settings/#databases
 for more information about the database options available.
 
@@ -246,7 +274,7 @@ to be able to log into the admin later)::
     have any superusers defined.  Would you like to create
     one now? (yes/no): yes
     Username (Leave blank to use 'username'): username
-    E-mail address: me@example.com
+    Email address: me@example.com
     Password: ******
     Password (again): ******
     Superuser created successfully.
@@ -305,7 +333,7 @@ or help this project in any way, please get in touch!
 :Tip: The Django admin monitor can be used even though you're not using
       Celery with a Django project.  See :ref:`monitoring-nodjango`.
 
-.. _`celerymon`: http://github.com/ask/celerymon/
+.. _`celerymon`: http://github.com/celery/celerymon/
 
 .. _monitoring-rabbitmq:
 
@@ -338,14 +366,14 @@ Finding the number of tasks in a queue::
 
 
     $ rabbitmqctl list_queues name messages messages_ready \
-                              messages_unacknowlged
+                              messages_unacknowledged
 
 
-Here ``messages_ready`` is the number of messages ready
-for delivery (sent but not received), ``messages_unacknowledged``
+Here `messages_ready` is the number of messages ready
+for delivery (sent but not received), `messages_unacknowledged`
 is the number of messages that has been received by a worker but
 not acknowledged yet (meaning it is in progress, or has been reserved).
-``messages`` is the sum of ready and unacknowledged messages combined.
+`messages` is the sum of ready and unacknowledged messages.
 
 
 Finding the number of workers currently consuming from a queue::
@@ -360,6 +388,37 @@ Finding the amount of memory allocated to a queue::
       easier to parse.
 
 
+.. _monitoring-redis:
+
+Redis
+=====
+
+If you're using Redis as the broker, you can monitor the Celery cluster using
+the `redis-cli(1)` command to list lengths of queues.
+
+.. _monitoring-redis-queues:
+
+Inspecting queues
+-----------------
+
+Finding the number of tasks in a queue::
+
+    $ redis-cli -h HOST -p PORT -n DATABASE_NUMBER llen QUEUE_NAME
+
+The default queue is named `celery`. To get all available queues, invoke::
+
+    $ redis-cli -h HOST -p PORT -n DATABASE_NUMBER keys \*
+
+.. note::
+
+  If a list has no elements in Redis, it doesn't exist. Hence it won't show up
+  in the `keys` command output. `llen` for that list returns 0 in that case.
+  
+  On the other hand, if you're also using Redis for other purposes, the output
+  of the `keys` command will include unrelated values stored in the database.
+  The recommended way around this is to use a dedicated `DATABASE_NUMBER` for
+  Celery.
+
 .. _monitoring-munin:
 
 Munin
@@ -373,12 +432,12 @@ maintaining a Celery cluster.
     http://github.com/ask/rabbitmq-munin
 
 * celery_tasks: Monitors the number of times each task type has
-  been executed (requires ``celerymon``).
+  been executed (requires `celerymon`).
 
     http://exchange.munin-monitoring.org/plugins/celery_tasks-2/details
 
 * celery_task_states: Monitors the number of tasks in each state
-  (requires ``celerymon``).
+  (requires `celerymon`).
 
     http://exchange.munin-monitoring.org/plugins/celery_tasks/details
 
@@ -397,7 +456,7 @@ and :program:`celeryev` to monitor the cluster.
 Snapshots
 ---------
 
-.. versionadded: 2.1
+.. versionadded:: 2.1
 
 Even a single worker can produce a huge amount of events, so storing
 the history of all events on disk may be very expensive.
@@ -408,7 +467,7 @@ still only periodically write it to disk.
 
 To take snapshots you need a Camera class, with this you can define
 what should happen every time the state is captured;  You can
-write it to a database, send it by e-mail or something else entirely.
+write it to a database, send it by email or something else entirely.
 
 :program:`celeryev` is then used to take snapshots with the camera,
 for example if you want to capture state every 2 seconds using the
@@ -434,7 +493,7 @@ Here is an example camera, dumping the snapshot to screen:
 
     class DumpCam(Polaroid):
 
-        def shutter(self, state):
+        def on_shutter(self, state):
             if not state.event_count:
                 # No new events since last snapshot.
                 return
@@ -446,8 +505,8 @@ Here is an example camera, dumping the snapshot to screen:
 See the API reference for :mod:`celery.events.state` to read more
 about state objects.
 
-Now you can use this cam with ``celeryev`` by specifying
-it with the ``-c`` option::
+Now you can use this cam with :program:`celeryev` by specifying
+it with the `-c` option::
 
     $ celeryev -c myapp.DumpCam --frequency=2.0
 
@@ -481,12 +540,17 @@ This list contains the events sent by the worker, and their arguments.
 Task Events
 ~~~~~~~~~~~
 
+* ``task-sent(uuid, name, args, kwargs, retries, eta, expires)``
+
+   Sent when a task message is published and
+   the :setting:`CELERY_SEND_TASK_SENT_EVENT` setting is enabled.
+
 * ``task-received(uuid, name, args, kwargs, retries, eta, hostname,
   timestamp)``
 
     Sent when the worker receives a task.
 
-* ``task-started(uuid, hostname, timestamp)``
+* ``task-started(uuid, hostname, timestamp, pid)``
 
     Sent just before the worker executes the task.
 
@@ -516,15 +580,19 @@ Task Events
 Worker Events
 ~~~~~~~~~~~~~
 
-* ``worker-online(hostname, timestamp)``
+* ``worker-online(hostname, timestamp, sw_ident, sw_ver, sw_sys)``
 
     The worker has connected to the broker and is online.
 
-* ``worker-heartbeat(hostname, timestamp)``
+    * `sw_ident`: Name of worker software (e.g. celeryd).
+    * `sw_ver`: Software version (e.g. 2.2.0).
+    * `sw_sys`: Operating System (e.g. Linux, Windows, Darwin).
+
+* ``worker-heartbeat(hostname, timestamp, sw_ident, sw_ver, sw_sys)``
 
     Sent every minute, if the worker has not sent a heartbeat in 2 minutes,
     it is considered to be offline.
 
-* ``worker-offline(hostname, timestamp)``
+* ``worker-offline(hostname, timestamp, sw_ident, sw_ver, sw_sys)``
 
     The worker has disconnected from the broker.
