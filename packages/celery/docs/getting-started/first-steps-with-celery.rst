@@ -7,6 +7,44 @@
 .. contents::
     :local:
 
+.. _celerytut-broker:
+
+Choosing your Broker
+====================
+
+Before you can use Celery you need to choose, install and run a broker.
+The broker is the service responsible for receiving and delivering task
+messages.
+
+There are several choices available, including:
+
+* :ref:`broker-rabbitmq`
+
+`RabbitMQ`_ is feature-complete, safe and durable. If not losing tasks
+is important to you, then this is your best option.
+
+* :ref:`broker-redis`
+
+`Redis`_ is also feature-complete, but power failures or abrupt termination
+may result in data loss.
+
+* :ref:`broker-sqlalchemy`
+* :ref:`broker-django`
+
+Using a database as a message queue is not recommended, but can be sufficient
+for very small installations.  Celery can use the SQLAlchemy and Django ORM.
+
+* and more.
+
+In addition to the above, there are several other transport implementations
+to choose from, including :ref:`broker-couchdb`, :ref:`broker-beanstalk`,
+:ref:`broker-mongodb`, and SQS.  There is a `Transport Comparison`_
+in the Kombu documentation.
+
+.. _`RabbitMQ`: http://www.rabbitmq.com/
+.. _`Redis`: http://redis.io/
+.. _`Transport Comparison`: http://kombu.rtfd.org/transport-comparison
+
 .. _celerytut-simple-tasks:
 
 Creating a simple task
@@ -22,17 +60,17 @@ like this:
 
 .. code-block:: python
 
-    from celery.decorators import task
+    from celery.task import task
 
     @task
     def add(x, y):
         return x + y
 
 
-All Celery tasks are classes that inherits from the
-:class:`~celery.task.base.Task` class.  In this example we're using a
-decorator that wraps the add function in an appropriate class for us
-automatically.
+Behind the scenes the `@task` decorator actually creates a class that
+inherits from :class:`~celery.task.base.Task`.  The best practice is to
+only create custom task classes when you want to change generic behavior,
+and use the decorator to define tasks.
 
 .. seealso::
 
@@ -57,11 +95,7 @@ Let's create our :file:`celeryconfig.py`.
 
 1. Configure how we communicate with the broker (RabbitMQ in this example)::
 
-        BROKER_HOST = "localhost"
-        BROKER_PORT = 5672
-        BROKER_USER = "myuser"
-        BROKER_PASSWORD = "mypassword"
-        BROKER_VHOST = "myvhost"
+        BROKER_URL = "amqp://guest:guest@localhost:5672//"
 
 2. Define the backend used to store task metadata and return values::
 
@@ -110,7 +144,7 @@ see what's going on in the terminal::
 
 In production you will probably want to run the worker in the
 background as a daemon.  To do this you need to use the tools provided
-by your platform, or something like `supervisord`_ (see :ref:`daemonization`
+by your platform, or something like `supervisord`_ (see :ref:`daemonizing`
 for more information).
 
 For a complete listing of the command line options available, do::
@@ -140,17 +174,40 @@ broker will hold on to the task until a worker server has consumed and
 executed it.
 
 Right now we have to check the worker log files to know what happened
-with the task.  This is because we didn't keep the
-:class:`~celery.result.AsyncResult` object returned.
+with the task.  Applying a task returns an
+:class:`~celery.result.AsyncResult`, if you have configured a result store
+the :class:`~celery.result.AsyncResult` enables you to check the state of
+the task, wait for the task to finish, get its return value
+or exception/traceback if the task failed, and more.
 
-The :class:`~celery.result.AsyncResult` lets us check the state of the task,
-wait for the task to finish, get its return value or exception/traceback
-if the task failed, and more.
+Keeping Results
+---------------
 
-Let's execute the task again -- but this time we'll keep track of the task
-by holding on to the :class:`~celery.result.AsyncResult`::
+If you want to keep track of the tasks state, Celery needs to store or send
+the states somewhere.  There are several
+built-in backends to choose from: SQLAlchemy/Django ORM, Memcached, Redis,
+AMQP, MongoDB, Tokyo Tyrant and Redis -- or you can define your own.
+
+For this example we will use the `amqp` result backend, which sends states
+as messages.  The backend is configured via the ``CELERY_RESULT_BACKEND``
+option, in addition individual result backends may have additional settings
+you can configure::
+
+    CELERY_RESULT_BACKEND = "amqp"
+
+    #: We want the results to expire in 5 minutes, note that this requires
+    #: RabbitMQ version 2.1.1 or higher, so please comment out if you have
+    #: an earlier version.
+    CELERY_TASK_RESULT_EXPIRES = 300
+
+To read more about result backends please see :ref:`task-result-backends`.
+
+Now with the result backend configured, let's execute the task again.
+This time we'll hold on to the :class:`~celery.result.AsyncResult`::
 
     >>> result = add.delay(4, 4)
+
+Here's some examples of what you can do when you have results::
 
     >>> result.ready() # returns True if the task has finished processing.
     False
@@ -167,8 +224,8 @@ by holding on to the :class:`~celery.result.AsyncResult`::
     >>> result.successful() # returns True if the task didn't end in failure.
     True
 
-If the task raises an exception, the return value of ``result.successful()``
-will be :const:`False`, and ``result.result`` will contain the exception instance
+If the task raises an exception, the return value of `result.successful()`
+will be :const:`False`, and `result.result` will contain the exception instance
 raised by the task.
 
 Where to go from here

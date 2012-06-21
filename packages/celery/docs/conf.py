@@ -3,6 +3,11 @@
 import sys
 import os
 
+# eventlet/gevent should not monkey patch anything.
+os.environ["GEVENT_NOPATCH"] = "yes"
+os.environ["EVENTLET_NOPATCH"] = "yes"
+os.environ["CELERY_LOADER"] = "default"
+
 this = os.path.dirname(os.path.abspath(__file__))
 
 # If your extensions are in another directory, add it here. If the directory
@@ -12,13 +17,27 @@ sys.path.append(os.path.join(os.pardir, "tests"))
 sys.path.append(os.path.join(this, "_ext"))
 import celery
 
+
+# use app loader
+from celery import Celery
+app = Celery(set_as_current=True)
+app.conf.update(BROKER_TRANSPORT="memory",
+                CELERY_RESULT_BACKEND="cache",
+                CELERY_CACHE_BACKEND="memory",
+                CELERYD_HIJACK_ROOT_LOGGER=False,
+                CELERYD_LOG_COLOR=False)
+
 # General configuration
 # ---------------------
 
 extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.coverage',
+              'sphinx.ext.pngmath',
+              'sphinx.ext.intersphinx',
               'sphinxcontrib.issuetracker',
               'celerydocs']
+
+html_show_sphinx = False
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['.templates']
@@ -31,7 +50,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Celery'
-copyright = u'2009-2010, Ask Solem & contributors'
+copyright = u'2009-2012, Ask Solem & Contributors'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -46,6 +65,12 @@ exclude_trees = ['.build']
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
 add_function_parentheses = True
+
+intersphinx_mapping = {
+        "http://docs.python.org/dev": None,
+        "http://kombu.readthedocs.org/en/latest/": None,
+        "http://django-celery.readthedocs.org/en/latest": None,
+}
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = 'trac'
@@ -65,7 +90,7 @@ html_use_index = True
 
 latex_documents = [
   ('index', 'Celery.tex', ur'Celery Documentation',
-   ur'Ask Solem', 'manual'),
+   ur'Ask Solem & Contributors', 'manual'),
 ]
 
 html_theme = "celery"
@@ -78,7 +103,7 @@ html_sidebars = {
 
 ### Issuetracker
 
-issuetracker = "github"
-issuetracker_user = "ask"
-issuetracker_project = "celery"
-issuetracker_issue_pattern = r'[Ii]ssue #(\d+)'
+if False:
+    issuetracker = "github"
+    issuetracker_project = "celery/celery"
+    issuetracker_issue_pattern = r'[Ii]ssue #(\d+)'

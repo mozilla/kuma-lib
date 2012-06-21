@@ -21,14 +21,14 @@ Resources
 Who's using Celery
 ------------------
 
-http://wiki.github.com/ask/celery/using
+http://wiki.github.com/celery/celery/using
 
 .. _res-wiki:
 
 Wiki
 ----
 
-http://wiki.github.com/ask/celery/
+http://wiki.github.com/celery/celery/
 
 .. _res-stackoverflow:
 
@@ -55,6 +55,10 @@ http://botland.oebfare.com/logger/celery/
 
 News
 ====
+
+Celery: Mini Tutorial (Catalan)
+-------------------------------
+http://trespams.com/2010/11/28/celery-mini-tutorial/
 
 Building a Django App Server with Chef
 --------------------------------------
@@ -210,7 +214,7 @@ http://www.slideshare.net/idangazit/an-introduction-to-celery
 
     <div style="width:425px;text-align:left" id="__ss_2089054">
     <a style="font:14px Helvetica,Arial,Sans-serif;display:block;
-    margin:12px 0 3px 0;text-decoration:underline;" 
+    margin:12px 0 3px 0;text-decoration:underline;"
     href="http://www.slideshare.net/idangazit/an-introduction-to-celery"
     title="An Introduction to Celery">An Introduction to Celery</a>
     <object style="margin:0px" width="425" height="355"> <param name="movie"

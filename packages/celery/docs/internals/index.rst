@@ -10,9 +10,9 @@
 .. toctree::
     :maxdepth: 2
 
+    guide
     deprecation
     worker
     protocol
-    events
-    moduleindex
+    app-overview
     reference/index

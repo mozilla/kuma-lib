@@ -4,12 +4,14 @@
  Routing Tasks
 ===============
 
-.. warning::
+.. note::
 
-    This document refers to functionality only available in brokers
-    using AMQP.  Other brokers may implement some functionality, see their
-    respective documentation for more information, or contact the
-    :ref:`mailing-list`.
+    Alternate routing concepts like topic and fanout may not be
+    available for all transports, please consult the `transport comparison table`_.
+
+.. _`transport comparison table`:
+    http://kombu.readthedocs.org/en/latest/introduction.html#transport-comparison
+
 
 .. contents::
     :local:
@@ -32,17 +34,17 @@ With this setting on, a named queue that is not already defined in
 :setting:`CELERY_QUEUES` will be created automatically.  This makes it easy to
 perform simple routing tasks.
 
-Say you have two servers, ``x``, and ``y`` that handles regular tasks,
-and one server ``z``, that only handles feed related tasks.  You can use this
+Say you have two servers, `x`, and `y` that handles regular tasks,
+and one server `z`, that only handles feed related tasks.  You can use this
 configuration::
 
     CELERY_ROUTES = {"feed.tasks.import_feed": {"queue": "feeds"}}
 
 With this route enabled import feed tasks will be routed to the
-``"feeds"`` queue, while all other tasks will be routed to the default queue
-(named ``"celery"`` for historic reasons).
+`"feeds"` queue, while all other tasks will be routed to the default queue
+(named `"celery"` for historical reasons).
 
-Now you can start server ``z`` to only process the feeds queue like this::
+Now you can start server `z` to only process the feeds queue like this::
 
     (z)$ celeryd -Q feeds
 
@@ -74,7 +76,7 @@ The point with this feature is to hide the complex AMQP protocol for users
 with only basic needs. However -- you may still be interested in how these queues
 are declared.
 
-A queue named ``"video"`` will be created with the following settings:
+A queue named `"video"` will be created with the following settings:
 
 .. code-block:: python
 
@@ -82,7 +84,7 @@ A queue named ``"video"`` will be created with the following settings:
      "exchange_type": "direct",
      "routing_key": "video"}
 
-The non-AMQP backends like ``ghettoq`` does not support exchanges, so they
+The non-AMQP backends like `ghettoq` does not support exchanges, so they
 require the exchange to have the same name as the queue. Using this design
 ensures it will work for them as well.
 
@@ -91,8 +93,8 @@ ensures it will work for them as well.
 Manual routing
 --------------
 
-Say you have two servers, ``x``, and ``y`` that handles regular tasks,
-and one server ``z``, that only handles feed related tasks, you can use this
+Say you have two servers, `x`, and `y` that handles regular tasks,
+and one server `z`, that only handles feed related tasks, you can use this
 configuration:
 
 .. code-block:: python
@@ -115,7 +117,7 @@ exchange/type/binding_key, if you don't set exchange or exchange type, they
 will be taken from the :setting:`CELERY_DEFAULT_EXCHANGE` and
 :setting:`CELERY_DEFAULT_EXCHANGE_TYPE` settings.
 
-To route a task to the ``feed_tasks`` queue, you can add an entry in the
+To route a task to the `feed_tasks` queue, you can add an entry in the
 :setting:`CELERY_ROUTES` setting:
 
 .. code-block:: python
@@ -128,8 +130,8 @@ To route a task to the ``feed_tasks`` queue, you can add an entry in the
     }
 
 
-You can also override this using the ``routing_key`` argument to
-:func:`~celery.execute.apply_async`, or :func:`~celery.execute.send_task`:
+You can also override this using the `routing_key` argument to
+:meth:`Task.apply_async`, or :func:`~celery.execute.send_task`:
 
     >>> from feeds.tasks import import_feed
     >>> import_feed.apply_async(args=["http://cnn.com/rss"],
@@ -137,12 +139,12 @@ You can also override this using the ``routing_key`` argument to
     ...                         routing_key="feed.import")
 
 
-To make server ``z`` consume from the feed queue exclusively you can
+To make server `z` consume from the feed queue exclusively you can
 start it with the ``-Q`` option::
 
     (z)$ celeryd -Q feed_tasks --hostname=z.example.com
 
-Servers ``x`` and ``y`` must be configured to consume from the default queue::
+Servers `x` and `y` must be configured to consume from the default queue::
 
     (x)$ celeryd -Q default --hostname=x.example.com
     (y)$ celeryd -Q default --hostname=y.example.com
@@ -243,7 +245,7 @@ The steps required to send and receive messages are:
 3. Bind the queue to the exchange.
 
 Celery automatically creates the entities necessary for the queues in
-:setting:`CELERY_QUEUES` to work (except if the queue's ``auto_declare``
+:setting:`CELERY_QUEUES` to work (except if the queue's `auto_declare`
 setting is set to :const:`False`).
 
 Here's an example queue configuration with three queues;
@@ -270,8 +272,8 @@ One for video, one for images and one default queue for everything else:
 
 .. note::
 
-    In Celery the ``routing_key`` is the key used to send the message,
-    while ``binding_key`` is the key the queue is bound with.  In the AMQP API
+    In Celery the `routing_key` is the key used to send the message,
+    while `binding_key` is the key the queue is bound with.  In the AMQP API
     they are both referred to as the routing key.
 
 .. _amqp-exchange-types:
@@ -294,7 +296,7 @@ Direct exchanges
 ~~~~~~~~~~~~~~~~
 
 Direct exchanges match by exact routing keys, so a queue bound by
-the routing key ``video`` only receives messages with that routing key.
+the routing key `video` only receives messages with that routing key.
 
 .. _amqp-exchange-type-topic:
 
@@ -334,7 +336,7 @@ Related API commands
     Declares a queue by name.
 
     Exclusive queues can only be consumed from by the current connection.
-    Exclusive also implies ``auto_delete``.
+    Exclusive also implies `auto_delete`.
 
 .. method:: queue.bind(queue_name, exchange_name, routing_key)
 
@@ -367,16 +369,16 @@ It's used for command-line access to the AMQP API, enabling access to
 administration tasks like creating/deleting queues and exchanges, purging
 queues or sending messages.
 
-You can write commands directly in the arguments to ``camqadm``, or just start
-with no arguments to start it in shell-mode::
+You can write commands directly in the arguments to :program:`camqadm`,
+or just start with no arguments to start it in shell-mode::
 
     $ camqadm
     -> connecting to amqp://guest@localhost:5672/.
     -> connected.
     1>
 
-Here `1>` is the prompt.  The number 1, is the number of commands you
-have executed so far.  Type `help` for a list of commands available.
+Here ``1>`` is the prompt.  The number 1, is the number of commands you
+have executed so far.  Type ``help`` for a list of commands available.
 It also supports auto-completion, so you can start typing a command and then
 hit the `tab` key to show a list of possible matches.
 
@@ -401,9 +403,7 @@ using the ``basic.publish`` command::
     ok.
 
 Now that the message is sent we can retrieve it again.  We use the
-``basic.get`` command here, which pops a single message off the queue,
-this command is not recommended for production as it implies polling, any
-real application would declare consumers instead.
+``basic.get``` command here, which polls for new messages on the queue.
 
 Pop a message off the queue::
 
@@ -422,11 +422,11 @@ and processed successfully.  If the message has not been acknowledged
 and consumer channel is closed, the message will be delivered to
 another consumer.
 
-Note the delivery tag listed in the structure above; Within a connection channel,
-every received message has a unique delivery tag,
+Note the delivery tag listed in the structure above; Within a connection
+channel, every received message has a unique delivery tag,
 This tag is used to acknowledge the message.  Also note that
 delivery tags are not unique across connections, so in another client
-the delivery tag ``1`` might point to a different message than in this channel.
+the delivery tag `1` might point to a different message than in this channel.
 
 You can acknowledge the message we received using ``basic.ack``::
 
@@ -493,7 +493,7 @@ Specifying task destination
 The destination for a task is decided by the following (in order):
 
 1. The :ref:`routers` defined in :setting:`CELERY_ROUTES`.
-2. The routing arguments to :func:`~celery.execute.apply_async`.
+2. The routing arguments to :func:`Task.apply_async`.
 3. Routing related attributes defined on the :class:`~celery.task.base.Task`
    itself.
 
@@ -536,17 +536,19 @@ that queue in :setting:`CELERY_QUEUES`::
          "routing_key": "video.compress"}
 
 
-You install router classes by adding them to the :setting:`CELERY_ROUTES` setting::
+You install router classes by adding them to the :setting:`CELERY_ROUTES`
+setting::
 
-    CELERY_ROUTES = (MyRouter, )
+    CELERY_ROUTES = (MyRouter(), )
 
 Router classes can also be added by name::
 
     CELERY_ROUTES = ("myapp.routers.MyRouter", )
 
 
-For simple task name -> route mappings like the router example above, you can simply
-drop a dict into :setting:`CELERY_ROUTES` to get the same behavior:
+For simple task name -> route mappings like the router example above,
+you can simply drop a dict into :setting:`CELERY_ROUTES` to get the
+same behavior:
 
 .. code-block:: python
 

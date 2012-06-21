@@ -1,10 +1,17 @@
 # Django settings for testproj project.
 
+import warnings
+warnings.filterwarnings(
+        'error', r"DateTimeField received a naive datetime",
+        RuntimeWarning, r'django\.db\.models\.fields')
+
 import os
 import sys
 # import source code dir
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), os.pardir))
+
+NO_NOSE = os.environ.get("DJCELERY_NO_NOSE", False)
 
 SITE_ID = 300
 
@@ -17,7 +24,8 @@ ADMINS = (
     # ('Your Name', 'your_email@domain.com'),
 )
 
-TEST_RUNNER = "django_nose.run_tests"
+if not NO_NOSE:
+    TEST_RUNNER = "django_nose.run_tests"
 here = os.path.abspath(os.path.dirname(__file__))
 COVERAGE_EXCLUDE_MODULES = ("djcelery",
                             "djcelery.tests.*",
@@ -48,21 +56,26 @@ CELERY_QUEUES = {"testcelery": {"binding_key": "testcelery"}}
 
 MANAGERS = ADMINS
 
-DATABASE_ENGINE = 'sqlite3'
-DATABASE_USER = ''
-DATABASE_PASSWORD = ''
-DATABASE_HOST = ''
-DATABASE_PORT = ''
+DATABASES = {"default": {"NAME": "djcelery-test-db",
+                         "ENGINE": "django.db.backends.sqlite3",
+                         "USER": '',
+                         "PASSWORD": '',
+                         "PORT": ''}}
+
 
 INSTALLED_APPS = (
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.sites',
-    'django_nose',
     'djcelery',
     'someapp',
     'someappwotask',
 )
 
+if not NO_NOSE:
+    INSTALLED_APPS = INSTALLED_APPS + ("django_nose", )
+
 CELERY_SEND_TASK_ERROR_EMAILS = False
+
+USE_TZ = True

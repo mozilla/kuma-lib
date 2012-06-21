@@ -6,3 +6,6 @@ celeryev = celery.bin.celeryev:main
 celeryd-multi = celery.bin.celeryd_multi:main
 celerybeat = celery.bin.celerybeat:main
 
+[bundle.bundles]
+celery = celery.contrib.bundles:bundles
+

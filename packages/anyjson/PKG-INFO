@@ -1,8 +1,7 @@
 Metadata-Version: 1.0
 Name: anyjson
-Version: 0.2.4
-Summary: Wraps the best available JSON implementation available in a common
-interface
+Version: 0.3.1
+Summary: Wraps the best available JSON implementation available in a common interface
 Home-page: http://bitbucket.org/runeh/anyjson
 Author: Rune Halvorsen
 Author-email: runefh@gmail.com
@@ -39,14 +38,14 @@ Description: ##############################
         
         >>> anyjson.serialize([object()])
         Traceback (most recent call last):
-        <snipped traceback>
+          <snipped traceback>
         TypeError: object is not JSON encodable
         
         And deserializing a JSON string with invalid JSON raises a ValueError:
         
         >>> anyjson.deserialize("""['missing square brace!""")
         Traceback (most recent call last):
-        <snipped traceback>
+          <snipped traceback>
         ValueError: cannot parse JSON description
         
         
@@ -72,3 +71,10 @@ Platform: any
 Classifier: License :: OSI Approved :: BSD License
 Classifier: Intended Audience :: Developers
 Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 2
+Classifier: Programming Language :: Python :: 2.4
+Classifier: Programming Language :: Python :: 2.5
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.1
