@@ -106,3 +106,6 @@
 [submodule "src/basket-client"]
 	path = src/basket-client
 	url = git://github.com/mozilla/basket-client.git
+[submodule "src/pytidylib"]
+	path = src/pytidylib
+	url = git://github.com/countergram/pytidylib.git
