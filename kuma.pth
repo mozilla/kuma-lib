@@ -74,3 +74,5 @@ src/requests
 src/nuggets
 src/basket-client
 src/pytidylib
+src/pystatsd
+src/django-statsd
