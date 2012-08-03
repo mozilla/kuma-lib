@@ -1,6 +1,6 @@
 [submodule "src/bleach"]
 	path = src/bleach
-	url = git://github.com/jsocol/bleach.git
+	url = git://github.com/lmorchard/bleach.git
 [submodule "src/cache-panel"]
 	path = src/cache-panel
 	url = git://github.com/jbalogh/django-debug-cache-panel
