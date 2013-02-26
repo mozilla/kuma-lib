@@ -77,4 +77,5 @@ src/basket-client
 src/pytidylib
 src/pystatsd
 src/django-statsd
+src/pyelasticsearch
 src/elasticutils
