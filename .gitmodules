@@ -118,3 +118,6 @@
 [submodule "src/elasticutils"]
 	path = src/elasticutils
 	url = git://github.com/mozilla/elasticutils.git
+[submodule "src/pyelasticsearch"]
+	path = src/pyelasticsearch
+	url = git://github.com/rhec/pyelasticsearch.git
