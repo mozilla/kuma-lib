@@ -79,3 +79,4 @@ src/pystatsd
 src/django-statsd
 src/pyelasticsearch
 src/elasticutils
+src/simplejson

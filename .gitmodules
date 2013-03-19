@@ -121,3 +121,6 @@
 [submodule "src/pyelasticsearch"]
 	path = src/pyelasticsearch
 	url = git://github.com/rhec/pyelasticsearch.git
+[submodule "src/simplejson"]
+	path = src/simplejson
+	url = git://github.com/simplejson/simplejson.git
