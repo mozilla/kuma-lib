@@ -124,3 +124,6 @@
 [submodule "src/simplejson"]
 	path = src/simplejson
 	url = git://github.com/simplejson/simplejson.git
+[submodule "src/django-tidings"]
+	path = src/django-tidings
+	url = git://github.com/erikrose/django-tidings.git
