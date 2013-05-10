@@ -4,7 +4,7 @@ Running Initialization Code Before the Test Run
 Many applications, especially those using web frameworks like Pylons_
 or Django_, can't be tested without first being configured or
 otherwise initialized. Plugins can fulfill this requirement by
-implementing `begin()`_.
+implementing :meth:`begin() <nose.plugins.base.IPluginInterface.begin>`.
 
 In this example, we'll use a very simple example: a widget class that
 can't be tested without a configuration.
@@ -24,6 +24,7 @@ raising any exceptions.
 
     >>> import unittest
     >>> class TestConfigurableWidget(unittest.TestCase):
+    ...     longMessage = False
     ...     def setUp(self):
     ...         self.widget = ConfigurableWidget()
     ...     def test_can_frobnicate(self):
@@ -32,6 +33,13 @@ raising any exceptions.
     ...     def test_likes_cheese(self):
     ...         """Widgets might like cheese"""
     ...         self.widget.likes_cheese()
+    ...     def shortDescription(self): # 2.7 compat
+    ...         try:
+    ...             doc = self._testMethodDoc
+    ...         except AttributeError:
+    ...             # 2.4 compat
+    ...             doc = self._TestCase__testMethodDoc
+    ...         return doc and doc.split("\n")[0].strip() or None
 
 The tests are bundled into a suite that we can pass to the test runner.
 
@@ -78,9 +86,10 @@ the tests fail.
     FAILED (errors=2)
 
 To configure the widget system before running tests, write a plugin
-that implements `begin()`_ and initializes the system with a
-hard-coded configuration. (Later, we'll write a better plugin that
-accepts a command-line argument specifying the configuration file.)
+that implements :meth:`begin() <nose.plugins.base.IPluginInterface.begin>`
+and initializes the system with a hard-coded configuration. (Later, we'll
+write a better plugin that accepts a command-line argument specifying the
+configuration file.)
 
     >>> from nose.plugins import Plugin
     >>> class ConfiguringPlugin(Plugin):
@@ -129,18 +138,20 @@ specify a configuration file on the command line:
 To use the plugin, we need a config file.
 
     >>> import os
-    >>> cfg_file = os.path.join(os.path.dirname(__file__), 'example.cfg')
-    >>> open(cfg_file, 'w').write("""\
+    >>> cfg_path = os.path.join(os.path.dirname(__file__), 'example.cfg')
+    >>> cfg_file = open(cfg_path, 'w')
+    >>> bytes = cfg_file.write("""\
     ... [DEFAULT]
     ... can_frobnicate = 1
     ... likes_cheese = 0
     ... """)
+    >>> cfg_file.close()
 
 Now we can execute a test run using that configuration, after first
 resetting the widget system to an unconfigured state.
 
     >>> ConfigurableWidget.cfg = None
-    >>> argv = [__file__, '-v', '--widget-config', cfg_file]
+    >>> argv = [__file__, '-v', '--widget-config', cfg_path]
     >>> run(argv=argv, suite=suite(),
     ...     plugins=[BetterConfiguringPlugin()]) # doctest: +REPORT_NDIFF
     Widgets can frobnicate (or not) ... ok
@@ -153,4 +164,3 @@ resetting the widget system to an unconfigured state.
 
 .. _Pylons: http://pylonshq.com/
 .. _Django: http://www.djangoproject.com/
-.. _`begin()`: plugin_interface.html#begin

@@ -42,6 +42,7 @@ packages/lockfile
 packages/recaptcha-client
 packages/beautifulsoup
 packages/pyes
+packages/six
 src
 src/django-cronjobs
 src/django-cache-machine

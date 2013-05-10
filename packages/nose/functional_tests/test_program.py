@@ -5,13 +5,14 @@ from nose import SkipTest
 from nose.core import TestProgram
 from nose.config import Config
 from nose.plugins.manager import DefaultPluginManager
+from nose.result import _TextTestResult
 
 here = os.path.dirname(__file__)
 support = os.path.join(here, 'support')
 
 class TestRunner(unittest.TextTestRunner):
     def _makeResult(self):
-        self.result = unittest._TextTestResult(
+        self.result = _TextTestResult(
             self.stream, self.descriptions, self.verbosity)
         return self.result 
 
@@ -109,6 +110,8 @@ class TestTestProgram(unittest.TestCase):
                            exit=False)
         res = runner.result
         print stream.getvalue()
+        print "-----"
+        print repr(res)
 
         # some versions of twisted.trial.unittest.TestCase have
         # runTest in the base class -- this is wrong! But we have
@@ -122,7 +125,15 @@ class TestTestProgram(unittest.TestCase):
                          (expect, res.testsRun))
         assert not res.wasSuccessful()
         assert len(res.errors) == 1
-        assert len(res.failures) == 2
+
+        # In 12.3, Twisted made their skip functionality match unittests, so the
+        # skipped test is no longer reported as a failure.
+        import twisted
+        v = twisted.version
+        if (v.major, v.minor) >= (12, 3):
+            assert len(res.failures) == 1
+        else:
+            assert len(res.failures) == 2
 
     def test_issue_130(self):
         """Collect and run tests in support/issue130 without error.
