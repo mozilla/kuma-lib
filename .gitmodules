@@ -127,3 +127,6 @@
 [submodule "src/django-tidings"]
 	path = src/django-tidings
 	url = git://github.com/erikrose/django-tidings.git
+[submodule "src/librabbitmq"]
+	path = src/librabbitmq
+	url = git://github.com/celery/librabbitmq.git
