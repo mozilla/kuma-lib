@@ -82,4 +82,3 @@ src/pyelasticsearch
 src/elasticutils
 src/simplejson
 src/django-tidings
-src/librabbitmq
