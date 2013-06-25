@@ -130,3 +130,9 @@
 [submodule "src/librabbitmq"]
 	path = src/librabbitmq
 	url = git://github.com/celery/librabbitmq.git
+[submodule "src/django-session-csrf"]
+	path = src/django-session-csrf
+	url = git://github.com/mozilla/django-session-csrf
+[submodule "src/raven-python"]
+	path = src/raven-python
+	url = git://github.com/getsentry/raven-python.git
