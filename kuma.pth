@@ -83,4 +83,5 @@ src/elasticutils
 src/simplejson
 src/django-tidings
 src/librabbitmq
+src/django-session-csrf
 src/raven-python
