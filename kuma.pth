@@ -86,3 +86,4 @@ src/librabbitmq
 src/django-session-csrf
 src/raven-python
 src/django-teamwork
+src/django-grappelli

@@ -139,3 +139,6 @@
 [submodule "src/django-teamwork"]
 	path = src/django-teamwork
 	url = git://github.com/lmorchard/django-teamwork.git
+[submodule "src/django-grappelli"]
+	path = src/django-grappelli
+	url = https://github.com/sehmaschine/django-grappelli.git
