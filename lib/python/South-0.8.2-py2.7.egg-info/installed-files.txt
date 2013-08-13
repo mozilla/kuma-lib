@@ -5,13 +5,13 @@
 ../south/modelsinspector.py
 ../south/orm.py
 ../south/signals.py
-../south/utils.py
 ../south/v2.py
 ../south/creator/__init__.py
 ../south/creator/actions.py
 ../south/creator/changes.py
 ../south/creator/freezer.py
 ../south/db/__init__.py
+../south/db/firebird.py
 ../south/db/generic.py
 ../south/db/mysql.py
 ../south/db/oracle.py
@@ -20,6 +20,7 @@
 ../south/management/__init__.py
 ../south/introspection_plugins/__init__.py
 ../south/introspection_plugins/annoying_autoonetoone.py
+../south/introspection_plugins/django_audit_log.py
 ../south/introspection_plugins/django_objectpermissions.py
 ../south/introspection_plugins/django_tagging.py
 ../south/introspection_plugins/django_taggit.py
@@ -34,6 +35,8 @@
 ../south/tests/__init__.py
 ../south/tests/autodetection.py
 ../south/tests/db.py
+../south/tests/db_mysql.py
+../south/tests/freezer.py
 ../south/tests/inspector.py
 ../south/tests/logger.py
 ../south/tests/logic.py
@@ -44,6 +47,7 @@
 ../south/management/commands/datamigration.py
 ../south/management/commands/graphmigrations.py
 ../south/management/commands/migrate.py
+../south/management/commands/migrationcheck.py
 ../south/management/commands/schemamigration.py
 ../south/management/commands/startmigration.py
 ../south/management/commands/syncdb.py
@@ -67,6 +71,8 @@
 ../south/tests/deps_c/models.py
 ../south/tests/deps_b/__init__.py
 ../south/tests/deps_b/models.py
+../south/tests/non_managed/__init__.py
+../south/tests/non_managed/models.py
 ../south/tests/circular_a/migrations/0001_first.py
 ../south/tests/circular_a/migrations/__init__.py
 ../south/tests/emptyapp/migrations/__init__.py
@@ -103,6 +109,10 @@
 ../south/tests/deps_b/migrations/0004_b.py
 ../south/tests/deps_b/migrations/0005_b.py
 ../south/tests/deps_b/migrations/__init__.py
+../south/tests/non_managed/migrations/__init__.py
+../south/utils/__init__.py
+../south/utils/datetime_utils.py
+../south/utils/py3.py
 ../south/__init__.pyc
 ../south/exceptions.pyc
 ../south/logger.pyc
@@ -110,13 +120,13 @@
 ../south/modelsinspector.pyc
 ../south/orm.pyc
 ../south/signals.pyc
-../south/utils.pyc
 ../south/v2.pyc
 ../south/creator/__init__.pyc
 ../south/creator/actions.pyc
 ../south/creator/changes.pyc
 ../south/creator/freezer.pyc
 ../south/db/__init__.pyc
+../south/db/firebird.pyc
 ../south/db/generic.pyc
 ../south/db/mysql.pyc
 ../south/db/oracle.pyc
@@ -125,6 +135,7 @@
 ../south/management/__init__.pyc
 ../south/introspection_plugins/__init__.pyc
 ../south/introspection_plugins/annoying_autoonetoone.pyc
+../south/introspection_plugins/django_audit_log.pyc
 ../south/introspection_plugins/django_objectpermissions.pyc
 ../south/introspection_plugins/django_tagging.pyc
 ../south/introspection_plugins/django_taggit.pyc
@@ -139,6 +150,8 @@
 ../south/tests/__init__.pyc
 ../south/tests/autodetection.pyc
 ../south/tests/db.pyc
+../south/tests/db_mysql.pyc
+../south/tests/freezer.pyc
 ../south/tests/inspector.pyc
 ../south/tests/logger.pyc
 ../south/tests/logic.pyc
@@ -149,6 +162,7 @@
 ../south/management/commands/datamigration.pyc
 ../south/management/commands/graphmigrations.pyc
 ../south/management/commands/migrate.pyc
+../south/management/commands/migrationcheck.pyc
 ../south/management/commands/schemamigration.pyc
 ../south/management/commands/startmigration.pyc
 ../south/management/commands/syncdb.pyc
@@ -172,6 +186,8 @@
 ../south/tests/deps_c/models.pyc
 ../south/tests/deps_b/__init__.pyc
 ../south/tests/deps_b/models.pyc
+../south/tests/non_managed/__init__.pyc
+../south/tests/non_managed/models.pyc
 ../south/tests/circular_a/migrations/0001_first.pyc
 ../south/tests/circular_a/migrations/__init__.pyc
 ../south/tests/emptyapp/migrations/__init__.pyc
@@ -208,6 +224,10 @@
 ../south/tests/deps_b/migrations/0004_b.pyc
 ../south/tests/deps_b/migrations/0005_b.pyc
 ../south/tests/deps_b/migrations/__init__.pyc
+../south/tests/non_managed/migrations/__init__.pyc
+../south/utils/__init__.pyc
+../south/utils/datetime_utils.pyc
+../south/utils/py3.pyc
 ./
 dependency_links.txt
 PKG-INFO
