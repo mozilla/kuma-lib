@@ -87,3 +87,4 @@ src/django-session-csrf
 src/raven-python
 src/django-teamwork
 src/django-grappelli
+src/urlobject
