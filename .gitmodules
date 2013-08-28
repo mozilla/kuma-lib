@@ -142,3 +142,6 @@
 [submodule "src/django-grappelli"]
 	path = src/django-grappelli
 	url = https://github.com/sehmaschine/django-grappelli.git
+[submodule "src/urlobject"]
+	path = src/urlobject
+	url = https://github.com/zacharyvoase/urlobject.git
