@@ -88,3 +88,4 @@ src/raven-python
 src/django-teamwork
 src/django-grappelli
 src/urlobject
+src/django-rest-framework
