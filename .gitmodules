@@ -145,3 +145,6 @@
 [submodule "src/urlobject"]
 	path = src/urlobject
 	url = https://github.com/zacharyvoase/urlobject.git
+[submodule "src/django-rest-framework"]
+	path = src/django-rest-framework
+	url = https://github.com/tomchristie/django-rest-framework.git
