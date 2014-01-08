@@ -89,3 +89,5 @@ src/django-teamwork
 src/django-grappelli
 src/urlobject
 src/django-rest-framework
+src/pymemcache
+src/django-pymemcache

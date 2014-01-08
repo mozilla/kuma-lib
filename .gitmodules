@@ -148,3 +148,9 @@
 [submodule "src/django-rest-framework"]
 	path = src/django-rest-framework
 	url = https://github.com/tomchristie/django-rest-framework.git
+[submodule "src/django-pymemcache"]
+	path = src/django-pymemcache
+	url = https://github.com/jezdez/django-pymemcache
+[submodule "src/pymemcache"]
+	path = src/pymemcache
+	url = https://github.com/pinterest/pymemcache
