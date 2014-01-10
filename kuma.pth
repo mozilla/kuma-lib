@@ -20,7 +20,6 @@ packages/setuptools
 packages/pep8
 packages/logilab-astng
 packages/importlib
-packages/python-memcached
 packages/selenium
 packages/mock
 packages/celery
@@ -89,5 +88,6 @@ src/django-teamwork
 src/django-grappelli
 src/urlobject
 src/django-rest-framework
-src/pymemcache
-src/django-pymemcache
+src/python-memcached
+src/hash_ring
+src/django-memcached-hashring

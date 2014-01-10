@@ -148,9 +148,12 @@
 [submodule "src/django-rest-framework"]
 	path = src/django-rest-framework
 	url = https://github.com/tomchristie/django-rest-framework.git
-[submodule "src/django-pymemcache"]
-	path = src/django-pymemcache
-	url = https://github.com/jezdez/django-pymemcache
-[submodule "src/pymemcache"]
-	path = src/pymemcache
-	url = https://github.com/pinterest/pymemcache
+[submodule "src/django-memcached-hashring"]
+	path = src/django-memcached-hashring
+	url = https://github.com/jezdez/django-memcached-hashring
+[submodule "src/hash_ring"]
+	path = src/hash_ring
+	url = https://github.com/Doist/hash_ring
+[submodule "src/python-memcached"]
+	path = src/python-memcached
+	url = https://github.com/linsomniac/python-memcached
