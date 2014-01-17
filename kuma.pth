@@ -91,3 +91,4 @@ src/django-rest-framework
 src/python-memcached
 src/hash_ring
 src/django-memcached-hashring
+src/django-badger

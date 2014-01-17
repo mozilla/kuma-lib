@@ -157,3 +157,6 @@
 [submodule "src/python-memcached"]
 	path = src/python-memcached
 	url = https://github.com/linsomniac/python-memcached.git
+[submodule "src/django-badger"]
+	path = src/django-badger
+	url = git://github.com/mozilla/django-badger.git
