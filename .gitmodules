@@ -150,10 +150,13 @@
 	url = https://github.com/tomchristie/django-rest-framework.git
 [submodule "src/django-memcached-hashring"]
 	path = src/django-memcached-hashring
-	url = https://github.com/jezdez/django-memcached-hashring
+	url = https://github.com/jezdez/django-memcached-hashring.git
 [submodule "src/hash_ring"]
 	path = src/hash_ring
-	url = https://github.com/Doist/hash_ring
+	url = https://github.com/Doist/hash_ring.git
 [submodule "src/python-memcached"]
 	path = src/python-memcached
-	url = https://github.com/linsomniac/python-memcached
+	url = https://github.com/linsomniac/python-memcached.git
+[submodule "src/django-badger"]
+	path = src/django-badger
+	url = git://github.com/mozilla/django-badger.git
