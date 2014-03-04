@@ -16,9 +16,6 @@
 [submodule "src/django-cronjobs"]
 	path = src/django-cronjobs
 	url = git://github.com/jsocol/django-cronjobs.git
-[submodule "src/django-debug-toolbar"]
-	path = src/django-debug-toolbar
-	url = git://github.com/robhudson/django-debug-toolbar.git
 [submodule "src/django-extensions"]
 	path = src/django-extensions
 	url = git://github.com/django-extensions/django-extensions.git
