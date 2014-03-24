@@ -157,3 +157,6 @@
 [submodule "src/django-badger"]
 	path = src/django-badger
 	url = git://github.com/mozilla/django-badger.git
+[submodule "src/django-gabeacon"]
+	path = src/django-gabeacon
+	url = git://github.com/jarekps/django-gabeacon.git
