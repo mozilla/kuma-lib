@@ -160,3 +160,6 @@
 [submodule "src/django-statici18n"]
 	path = src/django-statici18n
 	url = git://github.com/zyegfryed/django-statici18n.git
+[submodule "src/django-appconf"]
+	path = src/django-appconf
+	url = git://github.com/jezdez/django-appconf.git
