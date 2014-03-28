@@ -157,3 +157,6 @@
 [submodule "src/django-badger"]
 	path = src/django-badger
 	url = git://github.com/mozilla/django-badger.git
+[submodule "src/django-statici18n"]
+	path = src/django-statici18n
+	url = git://github.com/zyegfryed/django-statici18n.git
