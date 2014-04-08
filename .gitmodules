@@ -163,3 +163,9 @@
 [submodule "src/django-appconf"]
 	path = src/django-appconf
 	url = git://github.com/jezdez/django-appconf.git
+[submodule "src/elasticsearch-py"]
+	path = src/elasticsearch-py
+	url = https://github.com/elasticsearch/elasticsearch-py.git
+[submodule "src/urllib3"]
+	path = src/urllib3
+	url = https://github.com/shazow/urllib3.git

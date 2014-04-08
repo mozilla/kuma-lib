@@ -76,8 +76,9 @@ src/basket-client
 src/pytidylib
 src/pystatsd
 src/django-statsd
-src/pyelasticsearch
+src/elasticsearch-py
 src/elasticutils
+src/urllib3
 src/simplejson
 src/django-tidings
 src/librabbitmq
