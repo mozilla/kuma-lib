@@ -35,7 +35,7 @@ packages/translate-toolkit
 packages/nose
 packages/django-tagging
 packages/django-threadedcomments
-packages/feedparser
+packages/feedparser/feedparser
 packages/jsonpickle
 packages/lockfile
 packages/recaptcha-client
