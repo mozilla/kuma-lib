@@ -169,3 +169,15 @@
 [submodule "src/urllib3"]
 	path = src/urllib3
 	url = https://github.com/shazow/urllib3.git
+[submodule "src/django-allauth"]
+	path = src/django-allauth
+	url = https://github.com/pennersr/django-allauth.git
+[submodule "src/oauthlib"]
+	path = src/oauthlib
+	url = https://github.com/idan/oauthlib.git
+[submodule "src/python-openid"]
+	path = src/python-openid
+	url = https://github.com/openid/python-openid.git
+[submodule "src/requests-oauthlib"]
+	path = src/requests-oauthlib
+	url = https://github.com/requests/requests-oauthlib.git
