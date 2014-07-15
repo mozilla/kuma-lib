@@ -94,3 +94,7 @@ src/django-memcached-hashring
 src/django-badger
 src/django-appconf
 src/django-statici18n
+src/django-allauth
+src/requests-oauthlib
+src/python-openid
+src/oauthlib
