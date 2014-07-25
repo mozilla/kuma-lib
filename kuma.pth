@@ -24,6 +24,7 @@ packages/selenium
 packages/mock
 packages/celery
 packages/kombu
+packages/amqp
 packages/ordereddict
 packages/django-celery
 packages/html5lib/src
