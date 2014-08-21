@@ -98,3 +98,4 @@ src/django-allauth
 src/requests-oauthlib
 src/python-openid
 src/oauthlib
+src/responses

@@ -181,3 +181,6 @@
 [submodule "src/requests-oauthlib"]
 	path = src/requests-oauthlib
 	url = https://github.com/requests/requests-oauthlib.git
+[submodule "src/responses"]
+	path = src/responses
+	url = https://github.com/dropbox/responses.git
